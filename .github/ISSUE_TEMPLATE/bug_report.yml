@@ -1,0 +1,36 @@
+name: Bug report
+description: Something does not work or looks wrong
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping! If your PC is running hot or a pump/fan stopped, quit LinkMystic first (tray icon -> Quit): your LINK hub then runs the profile stored in its memory.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, and what did you see instead?
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: In LinkMystic open Logs -> "Copy diagnostics" and paste here (serial numbers are already hidden).
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log lines (optional)
+      description: The last lines from Logs around the problem.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: LinkMystic version
+      placeholder: v0.1.0
+    validations:
+      required: true

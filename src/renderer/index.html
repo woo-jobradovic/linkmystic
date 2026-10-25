@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' blob: data:">
+<title>LinkMystic</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<nav>
+  <div class="brand">LINK<span>MYSTIC</span></div>
+  <button data-tab="dash" class="on">Dashboard</button>
+  <button data-tab="light">Lighting</button>
+  <button data-tab="cool">Cooling</button>
+  <button data-tab="lcd">LCD screen</button>
+  <button data-tab="msi">MSI board</button>
+  <button data-tab="devices">Devices</button>
+  <button data-tab="logs">Logs</button>
+  <button data-tab="settings">Settings</button>
+  <div class="spacer"></div>
+  <div class="ver" id="ver"></div>
+</nav>
+<main>
+  <div class="banner bad" id="alarm"></div>
+  <div class="banner warn" id="conflict"></div>
+  <div class="banner warn" id="demo">Demo mode: simulated devices, nothing is sent to hardware.</div>
+
+  <section class="tab on" id="tab-dash">
+    <h1>Dashboard</h1>
+    <div class="grid">
+      <div class="card"><div class="label">Liquid</div><div class="value" id="dLiquid">-</div><div class="sub" id="dPreset"></div></div>
+      <div class="card"><div class="label">Pump</div><div class="value" id="dPump">-</div><div class="sub" id="dPumpDuty"></div></div>
+      <div class="card"><div class="label">Fans (average)</div><div class="value" id="dFans">-</div><div class="sub" id="dFanDuty"></div></div>
+      <div class="card"><div class="label">Power supply</div><div class="value" id="dPsu">-</div><div class="sub" id="dPsuSub"></div></div>
+    </div>
+    <h2>Status</h2>
+    <div class="grid">
+      <div class="card"><div class="label">Corsair LINK</div><div class="sub" id="dLink">-</div></div>
+      <div class="card"><div class="label">MSI board</div><div class="sub" id="dMsi">-</div></div>
+      <div class="card"><div class="label">Pump LCD</div><div class="sub" id="dLcd">-</div></div>
+    </div>
+    <p class="note">Closing this window keeps lighting and cooling running in the tray. Quit from the tray icon; the LINK hub then runs the profile stored in its memory.</p>
+  </section>
+
+  <section class="tab" id="tab-light">
+    <h1>Lighting</h1>
+    <h2>Effect (all devices in sync)</h2>
+    <div class="chips" id="effects"></div>
+    <div class="row"><label for="lColor">Colour</label><input type="color" id="lColor"></div>
+    <div class="row"><label for="lBright">Brightness</label><input type="range" id="lBright" min="0" max="100"><span id="lBrightV"></span></div>
+    <div class="row"><label for="lSpeed">Speed</label><input type="range" id="lSpeed" min="1" max="30"><span id="lSpeedV"></span></div>
+    <h2>Temperature effect colours (liquid)</h2>
+    <div class="row"><label>Green up to</label><input type="number" id="tCool" min="0" max="90"> &deg;C
+      <label class="inline">yellow at</label><input type="number" id="tWarm" min="1" max="95"> &deg;C
+      <label class="inline">red at</label><input type="number" id="tHot" min="2" max="100"> &deg;C</div>
+  </section>
+
+  <section class="tab" id="tab-cool">
+    <h1>Cooling</h1>
+    <div class="presets" id="presets"></div>
+    <h2 id="curveTitle">Curves</h2>
+    <div class="chips mb"><button class="chip on" data-curve="fans">Fans</button><button class="chip" data-curve="pump">Pump</button></div>
+    <canvas class="curve" id="curve" width="900" height="260"></canvas>
+    <p class="note" id="curveNote"></p>
+    <p class="note" id="safetyNote"></p>
+  </section>
+
+  <section class="tab" id="tab-lcd">
+    <h1>LCD screen</h1>
+    <div class="lcd-wrap">
+      <canvas id="lcdPreview" width="480" height="480"></canvas>
+      <div>
+        <div class="row"><label>Show on the screen</label><div class="chips" id="lcdOnOff"><button class="chip" data-v="true">On</button><button class="chip" data-v="false">Off (hub default)</button></div></div>
+        <div class="row"><label>Template</label><div class="chips" id="lcdTemplate"><button class="chip" data-v="cyberpunk">Cyberpunk</button><button class="chip" data-v="minimal">Minimal</button><button class="chip" data-v="image">Image / GIF</button></div></div>
+        <div class="row"><label>Value</label><div class="chips" id="lcdMetric"><button class="chip" data-v="liquid">Liquid &deg;C</button><button class="chip" data-v="pump">Pump RPM</button><button class="chip" data-v="fans">Fan RPM</button></div></div>
+        <div class="row"><label>Gauge range (&deg;C)</label><input type="number" id="lcdMin" min="0" max="90"> to <input type="number" id="lcdMax" min="5" max="100"></div>
+        <div class="row"><label for="lcdAccent">Number colour</label><input type="color" id="lcdAccent"></div>
+        <div class="row"><label for="lcdBright">Backlight</label><input type="range" id="lcdBright" min="0" max="100"><span id="lcdBrightV"></span></div>
+        <div class="row"><label for="lcdFps">Frames per second</label><input type="range" id="lcdFps" min="1" max="30"><span id="lcdFpsV"></span></div>
+        <div class="row" id="imgRow"><label>Image / GIF</label><button class="btn ghost" id="lcdPick">Choose file&hellip;</button><span class="note" id="lcdImgName"></span></div>
+        <p class="note">The pump screen takes about 20 frames per second at most (its USB link is the limit).</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="tab" id="tab-msi">
+    <h1>MSI board</h1>
+    <p class="note" id="msiBoard"></p>
+    <h2>Mode</h2>
+    <div class="chips" id="msiMode">
+      <button class="chip" data-v="builtin">Built-in effects (smooth)</button>
+      <button class="chip" data-v="mixed">Mixed (selected headers exact)</button>
+      <button class="chip" data-v="direct">All exact copy</button>
+    </div>
+    <p class="note">The board accepts about 10 updates per second in total, shared by the headers in exact mode. Built-in effects are animated by the board itself and are always smooth.</p>
+    <h2>Headers</h2>
+    <table><thead><tr><th>Header</th><th>Used</th><th>LEDs</th><th>Exact copy (mixed)</th><th>Built-in style</th></tr></thead><tbody id="msiHeaders"></tbody></table>
+    <p class="note">LEDs = what is plugged in (e.g. 3 fans x 12 LEDs = 36). Fans on a splitter share the signal, so count one fan chain only.</p>
+  </section>
+
+  <section class="tab" id="tab-devices">
+    <h1>Devices</h1>
+    <table><thead><tr><th>Hub</th><th>Ch</th><th>Device</th><th>Type</th><th>LEDs</th><th>RPM</th></tr></thead><tbody id="devTable"></tbody></table>
+    <h2>Power supply</h2>
+    <table><tbody id="psuTable"></tbody></table>
+  </section>
+
+  <section class="tab" id="tab-logs">
+    <h1>Logs</h1>
+    <div class="row"><button class="btn" id="diag">Copy diagnostics</button><button class="btn ghost" id="openLogs">Open log folder</button><button class="btn ghost" id="report">Report a problem</button></div>
+    <pre class="log" id="log"></pre>
+  </section>
+
+  <section class="tab" id="tab-settings">
+    <h1>Settings</h1>
+    <div class="row"><label>Start with Windows</label><div class="chips" id="sAuto"><button class="chip" data-v="true">Yes</button><button class="chip" data-v="false">No</button></div></div>
+    <div class="row"><label>Start in the tray</label><div class="chips" id="sMin"><button class="chip" data-v="true">Yes</button><button class="chip" data-v="false">No</button></div></div>
+    <h2>Safety (fixed)</h2>
+    <p class="note" id="safety"></p>
+    <h2>About</h2>
+    <p class="note">LinkMystic is free software under the GNU GPL v3 or later. It is not affiliated with Corsair or MSI. Protocol knowledge from OpenRGB, OpenLinkHub, liquidctl and SignalRGB.
+      Use at your own risk. <a href="#" id="repo">Source code and issues on GitHub</a>.</p>
+    <div class="row"><button class="btn ghost" id="quit">Quit LinkMystic</button></div>
+  </section>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>

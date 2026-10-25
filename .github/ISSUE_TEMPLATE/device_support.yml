@@ -1,0 +1,25 @@
+name: Device or motherboard support
+description: Ask for a Corsair iCUE LINK device, MSI motherboard or PSU that is not supported yet
+labels: [device-support]
+body:
+  - type: input
+    id: device
+    attributes:
+      label: Device / motherboard model
+      placeholder: e.g. MSI MAG B850 TOMAHAWK WIFI, iCUE LINK H150i LCD
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: In LinkMystic open Logs -> "Copy diagnostics" and paste here. It is read-only and hides serial numbers.
+      render: text
+    validations:
+      required: true
+  - type: checkboxes
+    id: tester
+    attributes:
+      label: Testing
+      options:
+        - label: I can test a development build on this hardware

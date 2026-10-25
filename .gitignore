@@ -1,0 +1,10 @@
+node_modules/
+dist/
+out/
+*.log
+.DS_Store
+Thumbs.db
+# personal data must never be committed
+diagnostics-*.txt
+*.bin
+config.local.json

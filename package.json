@@ -1,0 +1,85 @@
+{
+  "name": "linkmystic",
+  "productName": "LinkMystic",
+  "version": "0.1.0",
+  "description": "One small Windows app that replaces Corsair iCUE (iCUE LINK hub: lighting, fan and pump control, pump LCD) and MSI Mystic Light (X870/B850/B840/Z890 boards), plus Corsair HXi/RMi PSU monitoring.",
+  "license": "GPL-3.0-or-later",
+  "author": "LinkMystic contributors",
+  "homepage": "https://github.com/woo-jobradovic/linkmystic",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/woo-jobradovic/linkmystic.git"
+  },
+  "private": true,
+  "type": "module",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "demo": "electron . --demo",
+    "test": "node --test \"test/*.test.js\"",
+    "lint": "eslint .",
+    "diagnostics": "node src/engine/diagnostics.js",
+    "dist": "electron-builder --win nsis --publish never"
+  },
+  "dependencies": {
+    "node-hid": "3.4.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "electron": "44.9.3",
+    "electron-builder": "26.17.0",
+    "eslint": "10.12.0",
+    "globals": "17.13.0"
+  },
+  "build": {
+    "appId": "io.github.linkmystic",
+    "productName": "LinkMystic",
+    "copyright": "Copyright (C) 2026 LinkMystic contributors. GPL-3.0-or-later.",
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json",
+      "LICENSE",
+      "THIRD_PARTY_NOTICES.md",
+      "!assets/icon-png/icon-16.png",
+      "!**/node_modules/node-hid/hidapi/**",
+      "!**/node_modules/node-hid/src/**",
+      "!**/node_modules/node-hid/prebuilds/HID-darwin-*/**",
+      "!**/node_modules/node-hid/prebuilds/HID-linux-*/**",
+      "!**/node_modules/node-hid/prebuilds/HID_hidraw-*/**",
+      "!**/node_modules/node-hid/prebuilds/HID-win32-ia32/**",
+      "!**/node_modules/node-hid/prebuilds/HID-win32-arm64/**",
+      "!**/node_modules/node-addon-api/**"
+    ],
+    "asarUnpack": [
+      "**/node_modules/node-hid/**"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico",
+      "artifactName": "LinkMystic-Setup-${version}.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "LinkMystic",
+      "license": "LICENSE",
+      "deleteAppDataOnUninstall": false
+    },
+    "npmRebuild": false
+  }
+}
