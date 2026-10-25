@@ -17,6 +17,4 @@ contextBridge.exposeInMainWorld('lm', {
   getLcdImage: name => ipcRenderer.invoke('lcd:get-image', name),
   openExternal: what => ipcRenderer.invoke('open:external', what),
   quit: () => ipcRenderer.invoke('app:quit'),
-  // LCD renderer window only: the port that carries finished JPEG frames straight to the engine
-  onLcdPort: cb => ipcRenderer.on('lcd-port', e => cb(e.ports[0])),
 });

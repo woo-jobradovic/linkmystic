@@ -43,3 +43,16 @@ test('partial updates merge and unknown sections are ignored', () => {
   assert.equal(s.lighting.color, DEFAULTS.lighting.color);
   assert.ok(!('evil' in s));
 });
+
+test('lcd range: string or out-of-range min never yields NaN or max below min + 5', () => {
+  for (const lcd of [{ min: 'abc', max: 60 }, { min: -10, max: 2 }, { min: 200, max: 10 }, { min: 30, max: 'x' }]) {
+    const s = sanitize({ lcd });
+    assert.ok(Number.isFinite(s.lcd.min) && Number.isFinite(s.lcd.max), JSON.stringify(lcd));
+    assert.ok(s.lcd.max >= s.lcd.min + 5, JSON.stringify(lcd));
+  }
+});
+
+test('all MSI headers can be switched off', () => {
+  const s = update(sanitize(DEFAULTS), { msi: { headers: {} } });
+  assert.deepEqual(s.msi.headers, {});
+});

@@ -15,7 +15,12 @@ export class LinkHub {
     this.devices = [];
     this.software = false;
   }
-  cmd(command, data = []) { this.dev.write(L.commandPacket(command, data)); return this.dev.readTimeout(1000); }
+  cmd(command, data = []) {
+    this.dev.write(L.commandPacket(command, data));
+    const r = this.dev.readTimeout(1000);
+    if (!r.length) throw new Error('LINK hub did not answer');      // a silent timeout is an error, never an empty result
+    return r;
+  }
   read(ep, type) {
     this.cmd(L.CMD.close, ep);
     this.cmd(L.CMD.open, ep);
@@ -36,7 +41,12 @@ export class LinkHub {
   enumerate() { this.devices = L.parseDevices(this.read(L.EP.devices, L.TYPE.devices)); return this.devices; }
   speeds() { return L.parseSensors(this.read(L.EP.speeds, L.TYPE.speeds)); }
   temps() { return L.parseSensors(this.read(L.EP.temps, L.TYPE.temps), 10, true); }
-  setSpeeds(duties) { return this.write(L.EP.setSpeed, L.TYPE.setSpeed, L.speedData(duties)); }
+  // r[3] is the hub's status byte; non-zero means it did not accept the write (e.g. it fell back to hardware mode after sleep)
+  setSpeeds(duties) {
+    const r = this.write(L.EP.setSpeed, L.TYPE.setSpeed, L.speedData(duties));
+    if (r[3] !== 0x00) throw new Error(`LINK hub refused the speed write (status 0x${r[3].toString(16)})`);
+    return r;
+  }
   setColors(perChannel) {
     const payload = L.endpointPayload(L.TYPE.color, L.colorData(this.devices, perChannel));
     this.cmd(L.CMD.close, L.EP.color);
@@ -70,7 +80,8 @@ export class Psu {
   static async open(info) {
     const p = new Psu(); p.info = info; p.model = P.MODELS[info.productId] || 'Corsair PSU';
     p.dev = await HID.HIDAsync.open(info.path);
-    await p.dev.write(P.handshake()); await p.dev.read(500);
+    try { await p.dev.write(P.handshake()); await p.dev.read(500); }
+    catch (e) { await p.close(); throw e; }
     return p;
   }
   async reg(r) { await this.dev.write(P.readCmd(r)); const res = await this.dev.read(500); return res && res.length >= 4 ? P.linear11(res[2], res[3]) : null; }

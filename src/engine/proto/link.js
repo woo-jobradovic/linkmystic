@@ -80,7 +80,9 @@ export function parseDevices(r) {
   return out;
 }
 
-// Speeds / temperatures: r[6] = count, then 3 bytes per channel: status (0 = valid), value LE16
+// Speeds / temperatures: r[6] = count, then 3 bytes per entry: status (0 = valid), value LE16.
+// Entry i belongs to hub channel i (entry 0 = the hub itself): verified on a real hub, where entry 13 = TITAN pump rpm
+// and liquid temperature, entries 1-3 = fan rpm, matching the channels reported by parseDevices().
 export function parseSensors(r, scale = 1, signed = false) {
   const out = {};
   for (let i = 0; i < r[6]; i++) {

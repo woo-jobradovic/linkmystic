@@ -23,11 +23,13 @@ export function sanitize(input = {}, base = DEFAULTS) {
   const headerNames = Object.keys(HEADERS);
   const headers = {};
   for (const h of headerNames) {
-    const v = (M.headers || b.msi.headers)[h];
+    const src = M.headers && typeof M.headers === 'object' ? M.headers : b.msi.headers;
+    const v = src[h];
     if (v !== undefined && v !== null) headers[h] = int(v, 1, 240, 12);
   }
   const style = {};
   for (const h of headerNames) { const s = (M.style || b.msi.style || {})[h]; if (s && Object.hasOwn(MODES, s) && s !== 'direct' && s !== 'off') style[h] = s; }
+  const lcdMin = num(D.min, 0, 90, b.lcd.min);
   const t = L.temp || b.lighting.temp;
   const cool = num(t.cool, 0, 90, 30), warm = num(t.warm, cool + 1, 95, 36), hot = num(t.hot, warm + 1, 100, 42);
   return {
@@ -48,7 +50,7 @@ export function sanitize(input = {}, base = DEFAULTS) {
     },
     msi: {
       mode: oneOf(M.mode, ['builtin', 'mixed', 'direct'], b.msi.mode),
-      headers: Object.keys(headers).length ? headers : b.msi.headers,
+      headers,                                    // may be empty: no MSI headers in use
       directHeaders: Array.isArray(M.directHeaders) ? M.directHeaders.filter(h => headerNames.includes(h)) : b.msi.directHeaders,
       style,
       waveLeds: int(M.waveLeds, 4, 120, b.msi.waveLeds),
@@ -57,8 +59,8 @@ export function sanitize(input = {}, base = DEFAULTS) {
       enabled: bool(D.enabled, b.lcd.enabled),
       template: oneOf(D.template, ['cyberpunk', 'minimal', 'image'], b.lcd.template),
       metric: oneOf(D.metric, ['liquid', 'pump', 'fans'], b.lcd.metric),
-      min: num(D.min, 0, 90, b.lcd.min),
-      max: num(D.max, (D.min ?? b.lcd.min) + 5, 100, b.lcd.max),
+      min: lcdMin,
+      max: num(D.max, lcdMin + 5, 100, Math.max(b.lcd.max, lcdMin + 5)),
       brightness: num(D.brightness, 0, 100, b.lcd.brightness),
       fps: int(D.fps, 1, 30, b.lcd.fps),
       image: typeof D.image === 'string' && /^[\w.-]{1,80}$/.test(D.image) ? D.image : (D.image === null ? null : b.lcd.image),

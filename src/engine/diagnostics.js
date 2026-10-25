@@ -11,12 +11,13 @@ const VENDORS = new Set([0x1b1c, 0x0db0, 0x1462]);
 const h4 = n => n.toString(16).padStart(4, '0');
 
 export async function diagnostics(version = 'dev', engineState = null) {
-  const [hid, board, conf] = await Promise.all([listHid(), baseboard(), conflicts()]);
+  const [hid, board, probe] = await Promise.all([listHid(), baseboard(), conflicts()]);
+  const conf = probe ?? [];
   const lines = [
     `LinkMystic ${version} diagnostics`,
     `Windows ${os.release()} (${os.arch()})`,
     `Motherboard: ${board.manufacturer} | ${board.product} | MSI 761 supported: ${isSupportedBoard(board.product) ? 'yes' : 'no'}`,
-    `Conflicting software running: ${conf.length ? conf.map(c => c.process).join(', ') : 'none'}`,
+    `Conflicting software running: ${probe === null ? 'unknown (process list unavailable)' : conf.length ? conf.map(c => c.process).join(', ') : 'none'}`,
     '',
     'USB HID devices (Corsair / MSI):',
   ];

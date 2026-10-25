@@ -17,12 +17,14 @@ const CONFLICTS = {
   ledkeeper2: 'msi', mystic_light_service: 'msi', lightkeeperservice: 'msi',
   signalrgb: 'both', openrgb: 'both', fancontrol: 'corsair', openlinkhub: 'corsair',
 };
+// Returns null when the process list could not be read: callers must then keep their previous decision.
 export async function conflicts() {
   const out = await run('tasklist.exe', ['/fo', 'csv', '/nh']);
+  if (!out.trim()) return null;
   const found = new Map();
   for (const line of out.split(/\r?\n/)) {
     const name = (line.split('","')[0] || '').replace(/^"/, '').replace(/\.exe$/i, '').toLowerCase();
-    if (CONFLICTS[name]) found.set(name, CONFLICTS[name]);
+    if (Object.hasOwn(CONFLICTS, name)) found.set(name, CONFLICTS[name]);
   }
   return [...found].map(([process, family]) => ({ process, family }));
 }

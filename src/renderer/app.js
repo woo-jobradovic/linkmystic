@@ -1,5 +1,5 @@
 // LinkMystic UI. Talks to the main process only through window.lm (see src/main/preload.cjs).
-import { draw, loadFonts, decodeImage, frameAt } from '../lcd/render.js';
+import { draw, loadFonts, decodeImage, frameAt, freeFrames } from '../lcd/render.js';
 
 const $ = id => document.getElementById(id);
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -14,7 +14,15 @@ let pending = {}, saveTimer = null;
 function save(patch) {
   for (const [k, v] of Object.entries(patch)) pending[k] = { ...(pending[k] || {}), ...v };
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(async () => { const p = pending; pending = {}; S = await lm.setSettings(p); renderAll(); }, 200);
+  // keep the user's in-progress edits: store the validated result, but only redraw what has no live input
+  saveTimer = setTimeout(async () => {
+    const p = pending; pending = {};
+    const saved = await lm.setSettings(p);
+    if (Object.keys(pending).length) return;      // more edits queued while saving: the next save brings them
+    S = saved;
+    for (const k of Object.keys(p)) refresh[k]?.();
+    renderState();
+  }, 200);
 }
 const local = patch => { for (const [k, v] of Object.entries(patch)) S[k] = { ...S[k], ...v }; };
 
@@ -141,7 +149,10 @@ async function loadLcdImage() {
   if (S.lcd.image === lcdImage) return;
   lcdImage = S.lcd.image;
   const img = lcdImage ? await lm.getLcdImage(lcdImage) : null;
-  lcdFrames = img ? await decodeImage(img.data, img.type).catch(() => null) : null;
+  const next = img ? await decodeImage(img.data, img.type).catch(() => null) : null;
+  freeFrames(lcdFrames);
+  lcdFrames = next;
+  $('lcdImgName').textContent = lcdImage ? (next ? 'image loaded' : 'could not read this image (too large or damaged)') : 'no image chosen';
 }
 function renderLcd() {
   const D = S.lcd;
@@ -152,7 +163,6 @@ function renderLcd() {
   $('lcdBright').value = D.brightness; $('lcdBrightV').textContent = `${D.brightness}%`;
   $('lcdFps').value = D.fps; $('lcdFpsV').textContent = `${D.fps}`;
   $('imgRow').style.display = D.template === 'image' ? '' : 'none';
-  $('lcdImgName').textContent = D.image ? 'image loaded' : 'no image chosen';
   loadLcdImage();
 }
 $('lcdMin').onchange = () => save({ lcd: { min: +$('lcdMin').value, max: +$('lcdMax').value } });
@@ -220,5 +230,13 @@ function renderSettings() {
   chips('sMin', S.app.startMinimized, v => save({ app: { startMinimized: v } }));
 }
 
+// after a save, only the chip groups and lists are redrawn; sliders, colour pickers and number boxes keep what the user is doing
+const refresh = {
+  lighting: () => chips('effects', S.lighting.effect, v => { local({ lighting: { effect: v } }); save({ lighting: { effect: v } }); refresh.lighting(); }),
+  cooling: () => { if (dragIdx < 0) { renderCooling(); drawCurve(); } },
+  lcd: () => { chips('lcdOnOff', S.lcd.enabled, v => save({ lcd: { enabled: v } })); chips('lcdTemplate', S.lcd.template, v => save({ lcd: { template: v } })); chips('lcdMetric', S.lcd.metric, v => save({ lcd: { metric: v } })); $('imgRow').style.display = S.lcd.template === 'image' ? '' : 'none'; loadLcdImage(); },
+  msi: () => chips('msiMode', S.msi.mode, v => save({ msi: { mode: v } })),
+  app: renderSettings,
+};
 function renderAll() { renderLighting(); renderCooling(); renderLcd(); renderMsi(); renderSettings(); renderState(); drawCurve(); }
 renderAll();

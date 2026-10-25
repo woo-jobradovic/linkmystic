@@ -1,5 +1,5 @@
 // Hidden window: renders LCD frames and sends them as JPEG straight to the engine over a MessagePort.
-import { draw, loadFonts, decodeImage, frameAt } from './render.js';
+import { draw, loadFonts, decodeImage, frameAt, freeFrames } from './render.js';
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -12,7 +12,9 @@ window.lm.onSettings(async s => {
   if (s.lcd.template === 'image' && s.lcd.image && s.lcd.image !== imageName) {
     imageName = s.lcd.image;
     const img = await window.lm.getLcdImage(imageName);
-    frames = img ? await decodeImage(img.data, img.type).catch(() => null) : null;
+    const next = img ? await decodeImage(img.data, img.type).catch(() => null) : null;
+    freeFrames(frames);
+    frames = next;
   }
 });
 window.lm.onLcdPort(p => { port = p; port.start?.(); });

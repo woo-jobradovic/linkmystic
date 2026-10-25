@@ -114,18 +114,35 @@ export function draw(ctx, state, lcd, t, frame = null) {
   ctx.restore();
 }
 
-// Animated image support (GIF/APNG/WebP via ImageDecoder, still images via createImageBitmap)
+// Animated image support (GIF/APNG/WebP via ImageDecoder, still images via createImageBitmap).
+// Every frame is downscaled to cover the 480x480 screen while decoding, so memory stays small
+// (at most MAX_FRAMES x ~1 MB); absurdly large source images are refused.
+const MAX_FRAMES = 150;
+const MAX_SOURCE_PIXELS = 40e6;
+async function fitted(src) {
+  const w = src.displayWidth || src.width, h = src.displayHeight || src.height;
+  if (!w || !h || w * h > MAX_SOURCE_PIXELS) throw new Error('image too large');
+  const s = Math.max(SIZE / w, SIZE / h);
+  return createImageBitmap(src, { resizeWidth: Math.max(1, Math.round(w * s)), resizeHeight: Math.max(1, Math.round(h * s)), resizeQuality: 'medium' });
+}
 export async function decodeImage(buffer, type) {
   if ('ImageDecoder' in window && /gif|webp|png/.test(type)) {
     const dec = new ImageDecoder({ data: buffer, type });
-    await dec.tracks.ready;
-    const count = dec.tracks.selectedTrack?.frameCount || 1;
     const frames = [];
-    for (let i = 0; i < Math.min(count, 300); i++) { const { image: f } = await dec.decode({ frameIndex: i }); frames.push({ bitmap: await createImageBitmap(f), ms: (f.duration || 100000) / 1000 }); f.close(); }
-    return frames;
+    try {
+      await dec.tracks.ready;
+      const count = Math.min(dec.tracks.selectedTrack?.frameCount || 1, MAX_FRAMES);
+      for (let i = 0; i < count; i++) {
+        const { image: f } = await dec.decode({ frameIndex: i });
+        try { frames.push({ bitmap: await fitted(f), ms: Math.max(20, (f.duration || 100000) / 1000) }); } finally { f.close(); }
+      }
+      return frames;
+    } catch (e) { freeFrames(frames); throw e; } finally { dec.close(); }
   }
-  return [{ bitmap: await createImageBitmap(new Blob([buffer], { type })), ms: 1e9 }];
+  const full = await createImageBitmap(new Blob([buffer], { type }));
+  try { return [{ bitmap: await fitted(full), ms: 1e9 }]; } finally { full.close(); }
 }
+export function freeFrames(frames) { for (const f of frames || []) f.bitmap?.close(); }
 export function frameAt(frames, t) {
   if (!frames?.length) return null;
   const total = frames.reduce((a, f) => a + f.ms, 0);

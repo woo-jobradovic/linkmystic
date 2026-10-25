@@ -10,6 +10,10 @@ const send = msg => port.postMessage(msg);
 const log = line => send({ type: 'log', line: `${new Date().toISOString()} ${line}` });
 
 process.on('uncaughtException', e => { log(`engine error: ${e.stack || e.message}`); engine?.stop().finally(() => process.exit(1)); });
+// a stray async error must never take cooling control down: log it and keep running
+process.on('unhandledRejection', e => log(`engine warning (unhandled): ${e?.stack || e}`));
+
+const MAX_FRAME = 512 * 1024;   // a 480x480 JPEG is ~40-80 KB
 
 port.on('message', async ({ data, ports }) => {
   if (data?.type === 'start' && !engine) {
@@ -17,7 +21,9 @@ port.on('message', async ({ data, ports }) => {
     await engine.start().catch(e => log(`engine start failed: ${e.message}`));
     send({ type: 'state', state: engine.state() });
   } else if (data?.type === 'lcd-port' && ports?.[0]) {
-    ports[0].on('message', ({ data: frame }) => { if (frame) engine?.submitLcdFrame(new Uint8Array(frame)); });
+    ports[0].on('message', ({ data: frame }) => {
+      if (frame instanceof ArrayBuffer && frame.byteLength > 0 && frame.byteLength <= MAX_FRAME) engine?.submitLcdFrame(new Uint8Array(frame));
+    });
     ports[0].start();
   } else if (data?.type === 'settings' && engine) {
     await engine.applySettings(data.settings);

@@ -1,6 +1,7 @@
 // LinkMystic main process: windows, tray, settings, logs, and the engine process that owns the devices.
-import { app, BrowserWindow, Tray, Menu, ipcMain, dialog, shell, utilityProcess, MessageChannelMain, nativeImage, clipboard } from 'electron';
+import { app, BrowserWindow, Tray, Menu, ipcMain, dialog, shell, utilityProcess, MessageChannelMain, nativeImage, clipboard, session } from 'electron';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEFAULTS, sanitize, update } from '../engine/settings.js';
@@ -12,7 +13,9 @@ const root = path.join(here, '..', '..');
 const simulate = process.argv.includes('--demo');
 const startHidden = process.argv.includes('--hidden');
 
-if (!app.requestSingleInstanceLock()) app.quit();
+// a second copy must exit before it starts an engine: it would hand the first copy's hub back to hardware mode
+const primary = app.requestSingleInstanceLock();
+if (!primary) app.exit(0);
 
 const dataDir = app.getPath('userData');
 const settingsFile = path.join(dataDir, 'settings.json');
@@ -25,8 +28,11 @@ let win = null, lcdWin = null, tray = null, engine = null, quitting = false;
 const logBuffer = [];
 
 // ---------- logging ----------
+// logs get pasted into public issues: never include the Windows user folder or raw HID device paths
+const HOME = os.homedir();
+const redactLine = l => l.split(HOME).join('~').replace(/\\\\\?\\hid#[^\s,)]+/gi, '<hid-path>');
 function log(line) {
-  const l = line.match(/^\d{4}-\d\d-\d\dT/) ? line : `${new Date().toISOString()} ${line}`;
+  const l = redactLine(line.match(/^\d{4}-\d\d-\d\dT/) ? line : `${new Date().toISOString()} ${line}`);
   logBuffer.push(l); if (logBuffer.length > 2000) logBuffer.shift();
   try {
     fs.mkdirSync(logDir, { recursive: true });
@@ -63,7 +69,7 @@ function startEngine() {
   });
   engine.on('exit', code => {
     engine = null;
-    if (!quitting) { log(`engine stopped (code ${code}) - restarting in 3 s; the LINK hub runs its stored profile meanwhile`); setTimeout(() => { if (!quitting) { startEngine(); connectLcd(); } }, 3000); }
+    if (!quitting) { log(`engine stopped (code ${code}) - restarting in 3 s (if it could not hand the hub back, the hub returns to its stored profile by itself after about 10 s without updates)`); setTimeout(() => { if (!quitting) { startEngine(); connectLcd(); } }, 3000); }
   });
   engine.postMessage({ type: 'start', settings, simulate });
 }
@@ -90,6 +96,11 @@ const secure = { contextIsolation: true, nodeIntegration: false, sandbox: true, 
 function lockDown(w) {
   w.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   w.webContents.on('will-navigate', e => e.preventDefault());
+  // a crashed renderer (e.g. a bad image) is reloaded instead of leaving a frozen window or LCD
+  w.webContents.on('render-process-gone', (_e, d) => {
+    log(`window renderer stopped (${d.reason}) - reloading`);
+    if (!quitting && !w.isDestroyed()) w.webContents.reload();
+  });
 }
 function createWindow() {
   if (win) { win.show(); win.focus(); return; }
@@ -104,10 +115,11 @@ function createWindow() {
   win.on('closed', () => { win = null; });
 }
 function createLcdWindow() {
-  lcdWin = new BrowserWindow({ width: 480, height: 480, show: false, webPreferences: { ...secure, backgroundThrottling: false } });
+  lcdWin = new BrowserWindow({ width: 480, height: 480, show: false, webPreferences: { ...secure, preload: path.join(here, 'preload-lcd.cjs'), backgroundThrottling: false } });
   lockDown(lcdWin);
   lcdWin.loadFile(path.join(root, 'src', 'lcd', 'lcd.html'));
-  lcdWin.webContents.once('did-finish-load', () => { lcdWin.webContents.send('settings', settings); connectLcd(); });
+  // also after a reload: resend settings and state and give it a fresh frame port
+  lcdWin.webContents.on('did-finish-load', () => { lcdWin.webContents.send('settings', settings); lcdWin.webContents.send('state', state); connectLcd(); });
 }
 function createTray() {
   tray = new Tray(nativeImage.createFromPath(path.join(root, 'assets', 'icon.ico')));
@@ -125,7 +137,7 @@ async function quit() {
   quitting = true;
   log('quitting: handing devices back');
   if (engine) {
-    const done = new Promise(r => { engine.once('exit', r); setTimeout(r, 4000); });
+    const done = new Promise(r => { engine.once('exit', r); setTimeout(r, 10000); });
     engine.postMessage({ type: 'stop' });
     await done;
   }
@@ -134,13 +146,17 @@ async function quit() {
 
 // ---------- IPC (every handler validates its sender and its input) ----------
 // Only our own two windows, showing our own local pages, may call the main process.
-function trusted(e) {
+// The hidden LCD window decodes user images, so it may only fetch its image; everything else is main-window only.
+const LCD_CHANNELS = new Set(['lcd:get-image']);
+function trusted(e, channel) {
   const url = e.senderFrame?.url || '';
-  return url.startsWith('file://') && (e.sender === win?.webContents || e.sender === lcdWin?.webContents);
+  if (!url.startsWith('file://')) return false;
+  if (e.sender === win?.webContents) return true;
+  return e.sender === lcdWin?.webContents && LCD_CHANNELS.has(channel);
 }
 function handle(channel, fn) {
   ipcMain.handle(channel, (e, ...args) => {
-    if (!trusted(e)) { log(`refused IPC ${channel} from an untrusted sender`); throw new Error('untrusted sender'); }
+    if (!trusted(e, channel)) { log(`refused IPC ${channel} from an untrusted sender`); throw new Error('untrusted sender'); }
     return fn(e, ...args);
   });
 }
@@ -170,10 +186,15 @@ function ipc() {
     if (r.canceled || !r.filePaths[0]) return null;
     const src = r.filePaths[0];
     if (fs.statSync(src).size > 20e6) { dialog.showErrorBox('LinkMystic', 'Please choose an image smaller than 20 MB.'); return null; }
-    const ext = path.extname(src).toLowerCase().replace(/[^.a-z]/g, '');
+    const ext = path.extname(src).toLowerCase();
+    if (!['.png', '.jpg', '.jpeg', '.gif', '.webp'].includes(ext)) { dialog.showErrorBox('LinkMystic', 'Please choose a PNG, JPG, GIF or WebP image.'); return null; }
     const name = `lcd-${Date.now()}${ext}`;
     fs.mkdirSync(imageDir, { recursive: true });
     fs.copyFileSync(src, path.join(imageDir, name));
+    // keep only the newest copy (these are LinkMystic's own copies, never the user's original file)
+    for (const old of fs.readdirSync(imageDir)) {
+      if (old !== name && /^lcd-\d+\.(png|jpe?g|gif|webp)$/.test(old)) fs.rmSync(path.join(imageDir, old), { force: true });
+    }
     return name;
   });
   handle('lcd:get-image', (_e, name) => {
@@ -185,16 +206,19 @@ function ipc() {
   });
   handle('open:external', (_e, what) => {
     const urls = { repo: 'https://github.com/woo-jobradovic/linkmystic', issues: 'https://github.com/woo-jobradovic/linkmystic/issues/new/choose' };
-    if (urls[what]) shell.openExternal(urls[what]);
+    if (typeof what === 'string' && Object.hasOwn(urls, what)) shell.openExternal(urls[what]);
   });
   handle('app:quit', () => quit());
 }
 
 app.on('second-instance', () => createWindow());
 app.on('window-all-closed', e => e?.preventDefault?.());     // stay in the tray
-app.on('before-quit', e => { if (!quitting) { e.preventDefault(); quit(); } });
+app.on('before-quit', e => { if (primary && !quitting) { e.preventDefault(); quit(); } });
 
 app.whenReady().then(() => {
+  if (!primary) return;
+  session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));   // no camera, mic, notifications, ...
+  session.defaultSession.setPermissionCheckHandler(() => false);
   loadSettings();
   log(`LinkMystic ${app.getVersion()} starting${simulate ? ' (demo mode)' : ''}`);
   ipc();
@@ -203,7 +227,7 @@ app.whenReady().then(() => {
   startEngine();
   createLcdWindow();
   if (!startHidden) createWindow();
-  if (process.env.LM_SCREENSHOT) screenshots(process.env.LM_SCREENSHOT);
+  if (process.env.LM_SCREENSHOT && !app.isPackaged) screenshots(process.env.LM_SCREENSHOT);
 });
 
 // Development aid (only when LM_SCREENSHOT=<folder> is set): saves one PNG per tab, then quits.

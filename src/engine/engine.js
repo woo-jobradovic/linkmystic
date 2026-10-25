@@ -25,56 +25,82 @@ export class Engine {
   now() { return (Date.now() - this.t0) / 1000; }
 
   async start() {
-    this.board = this.simulate ? { manufacturer: 'Demo', product: 'MAG X870E TOMAHAWK WIFI (MS-7E59)' } : await baseboard();
+    try { this.board = this.simulate ? { manufacturer: 'Demo', product: 'MAG X870E TOMAHAWK WIFI (MS-7E59)' } : await baseboard(); }
+    catch { this.board = { manufacturer: '', product: '' }; }
     this.log(`board: ${this.board.manufacturer} ${this.board.product}`);
-    await this.checkConflicts();
-    await this.discover();
+    // timers first: a failed first discovery must never leave the engine without its loops
     this.timers = [
       setInterval(() => this.coolingTick(), 1000),
       setInterval(() => this.lightsTick(), 50),
-      setInterval(() => this.checkConflicts().then(() => this.discover()), 15000),
+      setInterval(() => this.refresh(), 15000),
       setInterval(() => this.psuTick(), 2000),
       setInterval(() => this.emit('state', this.state()), 1000),
     ];
+    await this.refresh();
     this.msiLoop();
     this.coolingTick();
   }
 
+  // conflict check + discovery, never overlapping and never throwing
+  async refresh() {
+    if (this.discovering || this.stopping) return;
+    this.discovering = true;
+    try { await this.checkConflicts(); await this.discover(); }
+    catch (e) { this.log(`device scan failed: ${e.message}`); }
+    finally { this.discovering = false; }
+  }
+
   async checkConflicts() {
     const list = this.simulate ? [] : await conflicts();
+    if (list === null) return;                     // process list unavailable: keep the previous decision (fail closed)
     this.live.conflicts = list;
     const corsair = list.some(c => c.family === 'corsair' || c.family === 'both');
     const msi = list.some(c => c.family === 'msi' || c.family === 'both');
     if (corsair && !this.blocked.corsair) { this.log(`other software is using Corsair devices (${list.map(c => c.process).join(', ')}): releasing them`); this.releaseHubs(); }
-    if (msi && !this.blocked.msi) { this.log('other software is using the MSI board: leaving it alone'); await this.msi?.close(); this.msi = null; }
+    if (msi && !this.blocked.msi) { this.log('other software is using the MSI board: leaving it alone'); await this.msi?.close(); this.msi = null; this.live.msi = 'paused: other MSI lighting software is running'; }
     this.blocked = { corsair, msi };
+  }
+
+  makeHub(info) { return this.simulate ? new SimHub(info) : new LinkHub(info); }   // tests replace this
+
+  // Open one LINK hub. Anything short of a fully recognised hub is handed straight back to its stored profile.
+  openHub(info) {
+    let hub;
+    try {
+      hub = this.makeHub(info);
+      const fw = hub.firmware();
+      hub.enterSoftwareMode();
+      const devs = hub.enumerate();
+      const unknown = devs.filter(d => d.kind === 'unknown');
+      const controllable = devs.filter(d => d.kind === 'pump' || d.kind === 'fan');
+      if (!devs.length) throw new Error('hub reported no devices (will retry)');
+      if (unknown.length) throw new Error(`unsupported device(s) on this hub (${unknown.map(d => d.name).join(', ')}) - left on its stored profile`);
+      if (!controllable.length) throw new Error('no fans or pump on this hub - left on its stored profile');
+      this.hubs.push({ hub, fw, stall: 0, status: 'ok' });
+      this.log(`LINK hub ${redact(info.serialNumber)} fw ${fw}: ${devs.map(d => `ch${d.channel} ${d.name}`).join(', ')}`);
+    } catch (e) {
+      this.log(`LINK hub not used: ${e.message}`);
+      try { hub?.close(); } catch { /* best effort: the hub falls back to its stored profile on its own */ }
+    }
   }
 
   async discover() {
     const all = this.simulate ? simHid() : await listHid();
-    // LINK hubs
     if (!this.blocked.corsair) {
-      for (const info of all.filter(match.linkHub)) {
-        if (this.hubs.some(h => h.hub.info.path === info.path)) continue;
-        try {
-          const hub = this.simulate ? new SimHub(info) : new LinkHub(info);
-          const fw = hub.firmware();
-          hub.enterSoftwareMode();
-          const devs = hub.enumerate();
-          this.hubs.push({ hub, fw, stall: 0, status: 'ok' });
-          this.log(`LINK hub ${redact(info.serialNumber)} fw ${fw}: ${devs.map(d => `ch${d.channel} ${d.name}`).join(', ')}`);
-        } catch (e) { this.log(`LINK hub open failed: ${e.message}`); }
-      }
+      for (const info of all.filter(match.linkHub)) if (!this.hubs.some(h => h.hub.info.path === info.path)) this.openHub(info);
       if (!this.lcd && this.settings.lcd.enabled) {
         const info = all.find(match.lcd);
         if (info) {
-          try { this.lcd = this.simulate ? new SimLcd(info) : await LcdScreen.open(info); await this.lcd.brightness(this.settings.lcd.brightness); this.live.lcd = 'ok'; this.log('pump LCD ready'); }
-          catch (e) { this.live.lcd = `unavailable: ${e.message}`; }
+          try { this.lcd = this.simulate ? new SimLcd(info) : await LcdScreen.open(info); await this.lcd.brightness(this.settings.lcd.brightness); this.live.lcd = 'ok'; this.lcdErrors = 0; this.log('pump LCD ready'); }
+          catch (e) { await this.lcd?.close(); this.lcd = null; this.live.lcd = `unavailable: ${e.message}`; }
         }
       }
       if (!this.psu) {
         const info = all.find(match.psu);
-        if (info) { try { this.psu = this.simulate ? new SimPsu(info) : await Psu.open(info); this.log(`PSU ${this.psu.model} (read-only monitoring)`); } catch (e) { this.log(`PSU open failed: ${e.message}`); } }
+        if (info) {
+          try { this.psu = this.simulate ? new SimPsu(info) : await Psu.open(info); this.log(`PSU ${this.psu.model} (read-only monitoring)`); }
+          catch (e) { this.log(`PSU not used: ${e.message}`); }
+        }
       }
     }
     // MSI board: only on the allow-listed 761 boards
@@ -82,7 +108,7 @@ export class Engine {
       const info = all.find(match.msi);
       if (info && !isSupportedBoard(this.board.product)) this.live.msi = `board "${this.board.product}" is not on the supported list - not touched`;
       else if (info) {
-        try { this.msi = this.simulate ? new SimMsi(info) : await MsiBoard.open(info); this.live.msi = 'ok'; this.log(`MSI board ${this.board.product} ready`); }
+        try { this.msi = this.simulate ? new SimMsi(info) : await MsiBoard.open(info); this.msiFresh = true; this.live.msi = 'ok'; this.log(`MSI board ${this.board.product} ready`); }
         catch (e) { this.live.msi = `unavailable: ${e.message}`; }
       }
     }
@@ -128,7 +154,12 @@ export class Engine {
         else if (dev.kind === 'fan') duties[dev.channel] = d.fans;
       }
       try { if (Object.keys(duties).length) h.hub.setSpeeds(duties); h.duties = d; }
-      catch (e) { this.log(`LINK hub speed write failed: ${e.message}`); }
+      catch (e) {
+        // e.g. after sleep the hub may be back on its stored profile: take it back and retry once
+        this.log(`LINK hub speed write failed (${e.message}) - re-entering software mode`);
+        try { h.hub.enterSoftwareMode(); h.hub.setSpeeds(duties); h.duties = d; }
+        catch (e2) { h.failures = (h.failures || 0) + 1; this.log(`LINK hub speed write failed again: ${e2.message}`); }
+      }
     }
     // a hub that stops answering is left to its stored profile
     for (const h of this.hubs.filter(x => x.failures >= 5)) { this.log('LINK hub not answering - leaving it to its stored profile'); try { h.hub.close(); } catch { /* gone */ } }
@@ -183,9 +214,9 @@ export class Engine {
       const { specs, direct } = this.msiSpecs(names);
       try {
         const key = JSON.stringify([specs, M.headers]);
-        if (key !== setupKey || Date.now() - setupAt > 30000) { await this.msi.setup(M.headers, specs); setupKey = key; setupAt = Date.now(); lastKey = ''; }
+        if (this.msiFresh || key !== setupKey || Date.now() - setupAt > 30000) { await this.msi.setup(M.headers, specs); this.msiFresh = false; setupKey = key; setupAt = Date.now(); lastKey = ''; }
         this.live.msi = direct.length === names.length ? 'ok (exact copy)' : direct.length ? `ok (${direct.join('+')} exact, rest built-in)` : 'ok (built-in effect)';
-        if (!direct.length) { await sleep(250); continue; }
+        if (!names.length || !direct.length) { await sleep(250); continue; }
         const frame = (h, t) => (this.live.alarm ? Array(M.headers[h]).fill(this.alarmColor(t)) : render(L, this.live.liquid, M.headers[h], t, M.waveLeds));
         const fkey = JSON.stringify(direct.map(h => frame(h, this.now())));
         if (isAnimated(L.effect) || this.live.alarm || fkey !== lastKey || Date.now() - lastAt > 10000) {
@@ -213,8 +244,15 @@ export class Engine {
     this.lcdBusy = true;
     while (this.lcdFrame && !this.stopping && this.lcd) {
       const f = this.lcdFrame; this.lcdFrame = null;
-      try { await this.lcd.show(f); this.lcdFrames++; this.live.lcd = 'ok'; }
-      catch (e) { this.live.lcd = `write failed: ${e.message}`; this.log(`LCD: ${e.message}`); break; }
+      try { await this.lcd.show(f); this.lcdFrames++; this.live.lcd = 'ok'; this.lcdErrors = 0; }
+      catch (e) {
+        // stop on the first failure: close the screen and let the next device scan (15 s) reopen it
+        this.lcdErrors = (this.lcdErrors || 0) + 1;
+        if (this.lcdErrors <= 3) this.log(`LCD write failed: ${e.message} - reopening on the next scan`);
+        this.live.lcd = `write failed: ${e.message}`;
+        const s = this.lcd; this.lcd = null; await s?.close();
+        break;
+      }
     }
     if (Date.now() - this.lcdSince > 5000) { this.live.lcdFps = +(this.lcdFrames * 1000 / (Date.now() - this.lcdSince)).toFixed(1); this.lcdFrames = 0; this.lcdSince = Date.now(); }
     this.lcdBusy = false;
@@ -225,7 +263,7 @@ export class Engine {
     this.settings = next;
     if (this.lcd && next.lcd.brightness !== prev.lcd.brightness) await this.lcd.brightness(next.lcd.brightness).catch(() => {});
     if (!next.lcd.enabled && this.lcd) { await this.lcd.close(); this.lcd = null; this.live.lcd = 'off'; }
-    if (next.lcd.enabled && !prev.lcd.enabled) await this.discover();
+    if (next.lcd.enabled && !prev.lcd.enabled) await this.refresh();
   }
 
   state() {
@@ -245,6 +283,6 @@ export class Engine {
     for (const t of this.timers || []) clearInterval(t);
     this.releaseHubs();
     await this.msi?.close();
-    this.log('stopped: LINK hubs back on their stored profiles');
+    this.log('stopped: LINK hubs handed back to their stored profiles; MSI headers keep their last colours until the next start or reboot');
   }
 }
