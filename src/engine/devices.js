@@ -1,5 +1,6 @@
 // USB transports. All protocol bytes come from ./proto/*; this file only moves them over HID.
 import HID from 'node-hid';
+import { Worker } from 'node:worker_threads';
 import * as L from './proto/link.js';
 import * as M from './proto/msi.js';
 import * as P from './proto/psu.js';
@@ -68,11 +69,44 @@ export class MsiBoard {
 }
 
 // ---------- pump LCD screen ----------
+// The screen is driven from its own thread (lcd-worker.js): frames keep flowing while the engine thread
+// is busy with the hub. show() resolves true when the frame reached the screen, false when a newer one replaced it.
 export class LcdScreen {
-  static async open(info) { const s = new LcdScreen(); s.info = info; s.dev = await HID.HIDAsync.open(info.path); return s; }
-  async brightness(pct) { await this.dev.sendFeatureReport(D.brightnessReport(pct)); }
-  async show(jpg) { for (const p of D.framePackets(jpg)) await this.dev.write(p); }
-  async close() { try { await this.dev.close(); } catch { /* already closed */ } }
+  static async open(info, { simulate = false } = {}) {
+    const s = new LcdScreen();
+    s.info = info; s.calls = new Map(); s.seq = 0;
+    s.worker = new Worker(new URL('./lcd-worker.js', import.meta.url), { workerData: { simulate } });
+    s.worker.on('message', m => {
+      const c = s.calls.get(m.id);
+      if (!c) return;
+      s.calls.delete(m.id);
+      if (m.error) c.reject(new Error(m.error)); else c.resolve(m.result !== 'replaced');
+    });
+    const fail = e => { for (const c of s.calls.values()) c.reject(e); s.calls.clear(); s.worker = null; };
+    s.worker.on('error', fail);
+    s.worker.on('exit', () => fail(new Error('LCD writer stopped')));
+    try { await s.call({ type: 'open', path: info.path }); }
+    catch (e) { await s.close(); throw e; }
+    return s;
+  }
+  call(msg, transfer) {
+    if (!this.worker) return Promise.reject(new Error('LCD writer stopped'));
+    return new Promise((resolve, reject) => {
+      const id = ++this.seq;
+      this.calls.set(id, { resolve, reject });
+      this.worker.postMessage({ ...msg, id }, transfer);
+    });
+  }
+  brightness(pct) { return this.call({ type: 'brightness', pct }); }
+  show(jpg) { const copy = jpg.slice(); return this.call({ type: 'frame', jpg: copy }, [copy.buffer]); }
+  async close() {
+    const w = this.worker;
+    if (!w) return;
+    // let the thread close the USB handle (at most 1 s), then end it
+    await Promise.race([this.call({ type: 'close' }).catch(() => {}), new Promise(r => setTimeout(r, 1000))]);
+    this.worker = null;
+    await w.terminate();
+  }
 }
 
 // ---------- Corsair HXi/RMi PSU, read-only ----------

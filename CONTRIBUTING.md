@@ -19,3 +19,10 @@ Rules for pull requests:
 5. No code copied from GPL-incompatible or proprietary sources (including vendor software). Protocol facts are fine; please credit your sources.
 
 By contributing you agree to license your work under GPL-3.0-or-later.
+
+## Adding an LCD theme
+
+1. Copy one of `src/lcd/themes/*.js` (each file is one theme: name, colors and animations with their defaults, and a `draw` function).
+2. List it in `src/lcd/themes.js`.
+3. Run `npm run themes:preview` and look at `theme-sheet.png`: every theme at a few moments of its animation plus a hot reading, and each theme's cost per frame (keep it under 10 ms).
+4. Draw everything yourself: no game logos, characters, official fonts or names. Use fonts that ship with Windows or the bundled OFL fonts.

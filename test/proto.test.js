@@ -42,7 +42,7 @@ test('LINK: sensor parsing (speeds, signed temperatures)', () => {
   assert.deepEqual(link.parseSensors(t, 10, true), { 0: 35.1 });
 });
 
-test('LINK: colour stream hides pump LEDs 16-19 under an LCD cap, chunks at 508', () => {
+test('LINK: color stream hides pump LEDs 16-19 under an LCD cap, chunks at 508', () => {
   const devs = [{ channel: 1, kind: 'fan', leds: 8 }, { channel: 13, kind: 'pump', leds: 20 }, { channel: 14, kind: 'lcd', leds: 24 }];
   const data = link.colorData(devs, { 1: [[1, 2, 3]], 13: [[9, 9, 9]], 14: [[5, 5, 5]] });
   assert.equal(data.length, (8 + 20 + 24) * 3);

@@ -46,13 +46,18 @@
     <h1>Lighting</h1>
     <h2>Effect (all devices in sync)</h2>
     <div class="chips" id="effects"></div>
-    <div class="row"><label for="lColor">Colour</label><input type="color" id="lColor"></div>
-    <div class="row"><label for="lBright">Brightness</label><input type="range" id="lBright" min="0" max="100"><span id="lBrightV"></span></div>
-    <div class="row"><label for="lSpeed">Speed</label><input type="range" id="lSpeed" min="1" max="30"><span id="lSpeedV"></span></div>
-    <h2>Temperature effect colours (liquid)</h2>
-    <div class="row"><label>Green up to</label><input type="number" id="tCool" min="0" max="90"> &deg;C
-      <label class="inline">yellow at</label><input type="number" id="tWarm" min="1" max="95"> &deg;C
-      <label class="inline">red at</label><input type="number" id="tHot" min="2" max="100"> &deg;C</div>
+    <p class="note" id="lDesc"></p>
+    <div class="row" data-use="color"><label for="lColor">Color</label><input type="color" id="lColor"></div>
+    <div class="row" data-use="brightness"><label for="lBright">Brightness</label><input type="range" id="lBright" min="0" max="100"><span id="lBrightV"></span></div>
+    <div class="row" data-use="speed"><label for="lSpeed">Speed</label><input type="range" id="lSpeed" min="1" max="30"><span id="lSpeedV"></span></div>
+    <div class="row" data-use="direction"><label>Direction</label><div class="chips" id="lDir"><button class="chip" data-v="cw">Clockwise</button><button class="chip" data-v="ccw">Counter-clockwise</button></div></div>
+    <div data-use="temp">
+      <h2>Temperature colors (liquid)</h2>
+      <div class="row"><label for="tcCool">Cool color</label><input type="color" id="tcCool"><label class="inline" for="tCool">up to</label><input type="number" id="tCool" min="0" max="90"> &deg;C</div>
+      <div class="row"><label for="tcWarm">Warm color</label><input type="color" id="tcWarm"><label class="inline" for="tWarm">at</label><input type="number" id="tWarm" min="1" max="95"> &deg;C</div>
+      <div class="row"><label for="tcHot">Hot color</label><input type="color" id="tcHot"><label class="inline" for="tHot">at</label><input type="number" id="tHot" min="2" max="100"> &deg;C and above</div>
+      <p class="note">Colors blend smoothly between the three points.</p>
+    </div>
   </section>
 
   <section class="tab" id="tab-cool">
@@ -70,11 +75,18 @@
     <div class="lcd-wrap">
       <canvas id="lcdPreview" width="480" height="480"></canvas>
       <div>
-        <div class="row"><label>Show on the screen</label><div class="chips" id="lcdOnOff"><button class="chip" data-v="true">On</button><button class="chip" data-v="false">Off (hub default)</button></div></div>
-        <div class="row"><label>Template</label><div class="chips" id="lcdTemplate"><button class="chip" data-v="cyberpunk">Cyberpunk</button><button class="chip" data-v="minimal">Minimal</button><button class="chip" data-v="image">Image / GIF</button></div></div>
+        <div class="row"><label>Show on the screen</label><div class="chips" id="lcdOnOff"><button class="chip" data-v="true">On</button><button class="chip" data-v="false">Off (dark)</button></div></div>
+        <p class="note">Off turns the screen dark at once. When LinkMystic quits, the screen shows its own built-in display after about 30 seconds.</p>
+        <div class="row"><label for="lcdTemplate">Theme</label><select id="lcdTemplate"></select></div>
+        <p class="note" id="lcdBlurb"></p>
         <div class="row"><label>Value</label><div class="chips" id="lcdMetric"><button class="chip" data-v="liquid">Liquid &deg;C</button><button class="chip" data-v="pump">Pump RPM</button><button class="chip" data-v="fans">Fan RPM</button></div></div>
         <div class="row"><label>Gauge range (&deg;C)</label><input type="number" id="lcdMin" min="0" max="90"> to <input type="number" id="lcdMax" min="5" max="100"></div>
-        <div class="row"><label for="lcdAccent">Number colour</label><input type="color" id="lcdAccent"></div>
+        <div id="themeBox">
+          <h2 id="themeTitle"></h2>
+          <div class="theme-colors" id="themeColors"></div>
+          <div class="row" id="themeAnimRow"><label>Animations</label><div class="chips" id="themeAnims"></div></div>
+          <div class="row"><button class="btn ghost" id="themeReset">Restore theme defaults</button></div>
+        </div>
         <div class="row"><label for="lcdBright">Backlight</label><input type="range" id="lcdBright" min="0" max="100"><span id="lcdBrightV"></span></div>
         <div class="row"><label for="lcdFps">Frames per second</label><input type="range" id="lcdFps" min="1" max="30"><span id="lcdFpsV"></span></div>
         <div class="row" id="imgRow"><label>Image / GIF</label><button class="btn ghost" id="lcdPick">Choose file&hellip;</button><span class="note" id="lcdImgName"></span></div>

@@ -117,6 +117,8 @@ function createWindow() {
 function createLcdWindow() {
   lcdWin = new BrowserWindow({ width: 480, height: 480, show: false, webPreferences: { ...secure, preload: path.join(here, 'preload-lcd.cjs'), backgroundThrottling: false } });
   lockDown(lcdWin);
+  // the hidden LCD window has no visible console: its warnings and errors go to the log
+  lcdWin.webContents.on('console-message', e => { if (e.level === 'warning' || e.level === 'error') log(`LCD window ${e.level}: ${String(e.message).slice(0, 300)}`); });
   lcdWin.loadFile(path.join(root, 'src', 'lcd', 'lcd.html'));
   // also after a reload: resend settings and state and give it a fresh frame port
   lcdWin.webContents.on('did-finish-load', () => { lcdWin.webContents.send('settings', settings); lcdWin.webContents.send('state', state); connectLcd(); });

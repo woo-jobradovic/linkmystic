@@ -5,10 +5,12 @@ import { baseboard, conflicts } from './system.js';
 import { decideDuties, PUMP_STALL_RPM } from './cooling.js';
 import { render, tempColor, hexToRgb, isAnimated } from './effects.js';
 import { isSupportedBoard, MODES, HEADERS } from './proto/msi.js';
-import { SimHub, SimMsi, SimLcd, SimPsu, simHid } from './sim.js';
+import { SimHub, SimMsi, SimPsu, simHid } from './sim.js';
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const redact = s => (s ? `${String(s).slice(0, 4)}…` : '');
+
+const LIGHTS_FPS = 30;
 
 export class Engine {
   constructor({ settings, log = () => {}, emit = () => {}, simulate = false }) {
@@ -19,7 +21,7 @@ export class Engine {
     this.msi = null; this.lcd = null; this.psu = null;
     this.board = null; this.blocked = { corsair: false, msi: false };
     this.live = { liquid: null, pumpRpm: null, fanRpm: [], duties: {}, alarm: null, msi: 'not found', lcd: 'not found', psu: null, conflicts: [] };
-    this.lcdFrame = null; this.lcdBusy = false; this.lcdFrames = 0; this.lcdSince = Date.now();
+    this.lcdFrames = 0; this.lcdSince = Date.now();
   }
 
   now() { return (Date.now() - this.t0) / 1000; }
@@ -31,11 +33,11 @@ export class Engine {
     // timers first: a failed first discovery must never leave the engine without its loops
     this.timers = [
       setInterval(() => this.coolingTick(), 1000),
-      setInterval(() => this.lightsTick(), 50),
       setInterval(() => this.refresh(), 15000),
       setInterval(() => this.psuTick(), 2000),
       setInterval(() => this.emit('state', this.state()), 1000),
     ];
+    this.lightsLoop();
     await this.refresh();
     this.msiLoop();
     this.coolingTick();
@@ -88,10 +90,12 @@ export class Engine {
     const all = this.simulate ? simHid() : await listHid();
     if (!this.blocked.corsair) {
       for (const info of all.filter(match.linkHub)) if (!this.hubs.some(h => h.hub.info.path === info.path)) this.openHub(info);
-      if (!this.lcd && this.settings.lcd.enabled) {
+      // opened even when switched off: off = backlight 0 + black frames, so the screen goes dark at once
+      // (released, the screen keeps its last picture for ~30 s before showing its own)
+      if (!this.lcd) {
         const info = all.find(match.lcd);
         if (info) {
-          try { this.lcd = this.simulate ? new SimLcd(info) : await LcdScreen.open(info); await this.lcd.brightness(this.settings.lcd.brightness); this.live.lcd = 'ok'; this.lcdErrors = 0; this.log('pump LCD ready'); }
+          try { this.lcd = await LcdScreen.open(info, { simulate: this.simulate }); await this.lcd.brightness(this.lcdBrightness()); this.live.lcd = this.lcdStatus(); this.lcdErrors = 0; this.log('pump LCD ready'); }
           catch (e) { await this.lcd?.close(); this.lcd = null; this.live.lcd = `unavailable: ${e.message}`; }
         }
       }
@@ -175,17 +179,44 @@ export class Engine {
 
   // ---------- LINK lighting: 20 frames per second ----------
   alarmColor(t) { return Math.floor(t * 2) % 2 ? [255, 0, 0] : [40, 0, 0]; }
+  // 30 lighting updates per second. Windows timers tick in ~15.6 ms steps, so a plain 33 ms interval really runs
+  // every ~47 ms (about 21 fps); each wait is measured against a running target instead, which averages 30.
+  lightsLoop() {
+    let next = Date.now();
+    const step = () => {
+      if (this.stopping) return;
+      try { this.lightsTick(); } catch (e) { this.log(`lighting error: ${e.message}`); }
+      next += 1000 / LIGHTS_FPS;
+      const now = Date.now();
+      if (next < now - 100) next = now;   // fell far behind (slow hub): carry on from now instead of bursting
+      this.lightsTimer = setTimeout(step, Math.max(0, next - now));
+    };
+    step();
+  }
+
   lightsTick() {
     if (this.stopping) return;
-    const t = this.now(), L = this.settings.lighting;
+    const t = this.now(), L = this.settings.lighting, started = Date.now();
+    let wheel = 0;
     for (const h of this.hubs) {
       const colors = {};
       for (const d of h.hub.devices) {
         if (d.leds <= 0) continue;
         const n = d.kind === 'pump' ? 16 : d.leds;
-        colors[d.channel] = this.live.alarm ? [this.alarmColor(t)] : render(L, this.live.liquid, n, t, n);
+        // every device is one wheel, a quarter turn behind the previous one (used by the spiral)
+        colors[d.channel] = this.live.alarm ? [this.alarmColor(t)] : render(L, this.live.liquid, n, t, n, (wheel++ * 0.25) % 1);
       }
-      try { h.hub.setColors(colors); } catch (e) { if (!h.colorError) this.log(`LINK colour write failed: ${e.message}`); h.colorError = true; }
+      try { h.hub.setColors(colors); } catch (e) { if (!h.colorError) this.log(`LINK color write failed: ${e.message}`); h.colorError = true; }
+    }
+    if (!this.hubs.length) return;
+    // measured, so the log shows whether 30 fps holds on this hub (a slow hub just runs at a lower rate)
+    const m = this.lightStats ??= { n: 0, ms: 0, since: Date.now(), logged: false };
+    m.n++; m.ms += Date.now() - started;
+    if (Date.now() - m.since >= 30000) {
+      this.live.lightsFps = +(m.n * 1000 / (Date.now() - m.since)).toFixed(1);
+      this.live.lightsMs = +(m.ms / m.n).toFixed(1);
+      if (!m.logged) { this.log(`LINK lighting: ${this.live.lightsFps} updates/s, ${this.live.lightsMs} ms each`); m.logged = true; }
+      Object.assign(m, { n: 0, ms: 0, since: Date.now() });
     }
   }
 
@@ -198,10 +229,12 @@ export class Engine {
     for (const h of names) {
       specs[h] = direct.includes(h) ? { direct: true }
         : this.live.alarm ? { mode: MODES.breathing, color: [255, 0, 0], speed: 2, brightness: 100 }
-        : L.effect === 'rainbow' || L.effect === 'color-cycle' ? { mode: MODES[M.style[h] || 'colorring'], rainbow: true, speed, brightness: L.brightness }
-        : L.effect === 'breathing' ? { mode: MODES.breathing, color: hexToRgb(L.color), speed, brightness: L.brightness }
+        // built-in board effects: the closest MSI mode for each of ours
+        : ['rainbow', 'spiral-rainbow', 'color-cycle'].includes(L.effect) ? { mode: MODES[M.style[h] || 'colorring'], rainbow: true, speed, brightness: L.brightness, reverse: L.direction === 'ccw' && L.effect !== 'color-cycle' }
+        : L.effect === 'breathing' || L.effect === 'color-pulse' ? { mode: MODES.breathing, color: hexToRgb(L.color), speed, brightness: L.brightness }
+        : L.effect === 'color-wave' || L.effect === 'visor' ? { mode: MODES.meteor, color: hexToRgb(L.color), speed, brightness: L.brightness, reverse: L.direction === 'ccw' && L.effect === 'color-wave' }
         : L.effect === 'off' ? { mode: MODES.off, brightness: 0 }
-        : { mode: MODES.steady, color: L.effect === 'temperature' ? tempColor(this.live.liquid, L.temp) : hexToRgb(L.color), brightness: L.brightness };
+        : { mode: MODES.steady, color: L.effect === 'temperature' ? tempColor(this.live.liquid, L.temp, L.tempColors) : hexToRgb(L.color), brightness: L.brightness };
     }
     return { specs, direct };
   }
@@ -236,34 +269,41 @@ export class Engine {
     this.psuBusy = false;
   }
 
-  // ---------- LCD: frames are rendered elsewhere and handed in; only the newest one is sent ----------
+  // ---------- LCD: frames are rendered elsewhere and handed in ----------
+  // The screen's writer thread keeps one frame waiting (newest wins). The returned promise settles when this frame
+  // is written or replaced, which is what the LCD window waits for before rendering the next one.
   async submitLcdFrame(jpg) {
-    if (!this.lcd || this.stopping) return;
-    this.lcdFrame = jpg;
-    if (this.lcdBusy) return;
-    this.lcdBusy = true;
-    while (this.lcdFrame && !this.stopping && this.lcd) {
-      const f = this.lcdFrame; this.lcdFrame = null;
-      try { await this.lcd.show(f); this.lcdFrames++; this.live.lcd = 'ok'; this.lcdErrors = 0; }
-      catch (e) {
-        // stop on the first failure: close the screen and let the next device scan (15 s) reopen it
-        this.lcdErrors = (this.lcdErrors || 0) + 1;
-        if (this.lcdErrors <= 3) this.log(`LCD write failed: ${e.message} - reopening on the next scan`);
-        this.live.lcd = `write failed: ${e.message}`;
-        const s = this.lcd; this.lcd = null; await s?.close();
-        break;
-      }
+    const lcd = this.lcd;
+    if (!lcd || this.stopping) return;
+    try {
+      if (!(await lcd.show(jpg))) return;   // replaced by a newer frame
+      this.lcdFrames++; this.live.lcd = this.lcdStatus(); this.lcdErrors = 0;
+      if (!lcd.streaming) { lcd.streaming = true; this.log('pump LCD streaming'); }
+    } catch (e) {
+      // stop on the first failure: close the screen and let the next device scan (15 s) reopen it
+      if (this.lcd !== lcd) return;          // already handled, or switched over
+      this.lcdErrors = (this.lcdErrors || 0) + 1;
+      if (this.lcdErrors <= 3) this.log(`LCD write failed: ${e.message} - reopening on the next scan`);
+      this.live.lcd = `write failed: ${e.message}`;
+      this.lcd = null; await lcd.close();
     }
-    if (Date.now() - this.lcdSince > 5000) { this.live.lcdFps = +(this.lcdFrames * 1000 / (Date.now() - this.lcdSince)).toFixed(1); this.lcdFrames = 0; this.lcdSince = Date.now(); }
-    this.lcdBusy = false;
+    if (Date.now() - this.lcdSince > 10000) {
+      this.live.lcdFps = +(this.lcdFrames * 1000 / (Date.now() - this.lcdSince)).toFixed(1);
+      if (!this.lcdFpsLogged && this.settings.lcd.enabled) { this.lcdFpsLogged = true; this.log(`pump LCD: ${this.live.lcdFps} frames/s`); }
+      this.lcdFrames = 0; this.lcdSince = Date.now();
+    }
   }
+
+  lcdBrightness() { return this.settings.lcd.enabled ? this.settings.lcd.brightness : 0; }
+  lcdStatus() { return this.settings.lcd.enabled ? 'ok' : 'off (screen dark)'; }
 
   async applySettings(next) {
     const prev = this.settings;
     this.settings = next;
-    if (this.lcd && next.lcd.brightness !== prev.lcd.brightness) await this.lcd.brightness(next.lcd.brightness).catch(() => {});
-    if (!next.lcd.enabled && this.lcd) { await this.lcd.close(); this.lcd = null; this.live.lcd = 'off'; }
-    if (next.lcd.enabled && !prev.lcd.enabled) await this.refresh();
+    if (this.lcd && (next.lcd.brightness !== prev.lcd.brightness || next.lcd.enabled !== prev.lcd.enabled)) {
+      await this.lcd.brightness(this.lcdBrightness()).catch(() => {});
+      this.live.lcd = this.lcdStatus();
+    }
   }
 
   state() {
@@ -281,8 +321,11 @@ export class Engine {
   async stop() {
     this.stopping = true;
     for (const t of this.timers || []) clearInterval(t);
+    clearTimeout(this.lightsTimer);
+    // switched off = backlight 0: give the screen its backlight back, or its own display would stay dark after we quit
+    if (this.lcd) await this.lcd.brightness(this.settings.lcd.brightness).catch(() => {});
     this.releaseHubs();
     await this.msi?.close();
-    this.log('stopped: LINK hubs handed back to their stored profiles; MSI headers keep their last colours until the next start or reboot');
+    this.log('stopped: LINK hubs handed back to their stored profiles; MSI headers keep their last colors until the next start or reboot');
   }
 }

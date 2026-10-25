@@ -9,8 +9,8 @@ export default [
     languageOptions: { ecmaVersion: 2024, sourceType: 'module', globals: { ...globals.node } },
   },
   {
-    files: ['src/main/preload.cjs'],
-    languageOptions: { ecmaVersion: 2024, sourceType: 'commonjs', globals: { ...globals.node } },
+    files: ['src/main/preload.cjs', 'src/main/preload-lcd.cjs', 'scripts/**/*.cjs'],
+    languageOptions: { ecmaVersion: 2024, sourceType: 'commonjs', globals: { ...globals.node, window: 'readonly' } },
   },
   {
     files: ['src/renderer/**/*.js', 'src/lcd/**/*.js'],

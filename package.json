@@ -2,7 +2,7 @@
   "name": "linkmystic",
   "productName": "LinkMystic",
   "version": "0.1.0",
-  "description": "One small Windows app that replaces Corsair iCUE (iCUE LINK hub: lighting, fan and pump control, pump LCD) and MSI Mystic Light (X870/B850/B840/Z890 boards), plus Corsair HXi/RMi PSU monitoring.",
+  "description": "Lightweight open-source RGB sync and fan control for MSI Mystic Light motherboards and Corsair iCUE LINK: synced lighting, AIO pump and fan curves, and animated pump LCD themes.",
   "license": "GPL-3.0-or-later",
   "author": "LinkMystic contributors",
   "homepage": "https://github.com/woo-jobradovic/linkmystic",
@@ -19,7 +19,8 @@
     "test": "node --test \"test/*.test.js\"",
     "lint": "eslint .",
     "diagnostics": "node src/engine/diagnostics.js",
-    "dist": "electron-builder --win nsis --publish never"
+    "dist": "electron-builder --win nsis --publish never",
+    "themes:preview": "electron scripts/theme-sheet.cjs theme-sheet.png"
   },
   "dependencies": {
     "node-hid": "3.4.0"
@@ -89,5 +90,26 @@
       "enableEmbeddedAsarIntegrityValidation": true,
       "onlyLoadAppFromAsar": true
     }
+  },
+  "keywords": [
+    "rgb",
+    "rgb-sync",
+    "msi",
+    "mystic-light",
+    "msi-mystic-light",
+    "corsair",
+    "icue",
+    "icue-link",
+    "icue-alternative",
+    "argb",
+    "fan-control",
+    "aio",
+    "pump-lcd",
+    "lcd-themes",
+    "windows",
+    "gaming"
+  ],
+  "bugs": {
+    "url": "https://github.com/woo-jobradovic/linkmystic/issues"
   }
 }

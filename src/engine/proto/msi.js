@@ -33,16 +33,16 @@ export const HEADERS = { JARGB1: { h: [0x04, 0], row: 0 }, JARGB2: { h: [0x04, 1
 // Built-in effect modes (board animates them itself)
 export const MODES = { off: 0, wave: 1, steady: 2, flame: 3, breathing: 4, colorring: 5, lightning: 6, recreation: 7, meteor: 8, direct: 9 };
 
-// One 16-byte header row: mode, 4 x RGB, colour count, packed flags, LED count.
-// flags = speed (bits 0-1) | brightness 0-5 (bits 2-4) | user colour (bit 5) | direction (bit 6) | follow Select All (bit 7)
+// One 16-byte header row: mode, 4 x RGB, color count, packed flags, LED count.
+// flags = speed (bits 0-1) | brightness 0-5 (bits 2-4) | user color (bit 5) | direction (bit 6) | follow Select All (bit 7)
 export function headerRow(spec, leds) {
   if (!spec) return [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x1e];
   if (spec.direct) return [MODES.direct, 0xff, 0, 0, 0, 0xff, 0, 0, 0, 0xff, 0xff, 0xff, 0xff, 0x03, 0x15, leds];
-  const { mode, color = [255, 255, 255], speed = 1, brightness = 100, rainbow = false } = spec;
+  const { mode, color = [255, 255, 255], speed = 1, brightness = 100, rainbow = false, reverse = false } = spec;
   const bri = Math.max(0, Math.min(5, Math.round(brightness / 20)));
   const r = [mode];
   for (let k = 0; k < 4; k++) r.push(color[0], color[1], color[2]);
-  r.push(0x00, (speed & 0x03) | (bri << 2) | (rainbow ? 0 : 0x20), leds);
+  r.push(0x00, (speed & 0x03) | (bri << 2) | (rainbow ? 0 : 0x20) | (reverse ? 0x40 : 0), leds);
   return r;
 }
 

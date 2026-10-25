@@ -1,6 +1,6 @@
 // Engine process entry (Electron utilityProcess). Talks to the main process over parentPort:
 //   in:  { type: 'start', settings, simulate } | { type: 'settings', settings } | { type: 'stop' }
-//   in (LCD port): ArrayBuffer JPEG frames
+//   in (LCD port): JPEG frames (Uint8Array)
 //   out: { type: 'state', state } | { type: 'log', line } | { type: 'stopped' }
 import { Engine } from './engine.js';
 
@@ -21,10 +21,17 @@ port.on('message', async ({ data, ports }) => {
     await engine.start().catch(e => log(`engine start failed: ${e.message}`));
     send({ type: 'state', state: engine.state() });
   } else if (data?.type === 'lcd-port' && ports?.[0]) {
-    ports[0].on('message', ({ data: frame }) => {
-      if (frame instanceof ArrayBuffer && frame.byteLength > 0 && frame.byteLength <= MAX_FRAME) engine?.submitLcdFrame(new Uint8Array(frame));
+    const lcdPort = ports[0];
+    // every frame is answered with 'ack' once written or replaced: the LCD window renders the next one then,
+    // so frames are paced by the screen itself and none are thrown away unevenly
+    const ack = () => lcdPort.postMessage('ack');
+    lcdPort.on('message', ({ data: frame }) => {
+      // frames arrive as a copied Uint8Array (a transferred ArrayBuffer arrives as null through MessagePortMain)
+      const jpg = frame instanceof Uint8Array ? frame : frame instanceof ArrayBuffer ? new Uint8Array(frame) : null;
+      if (jpg && jpg.byteLength > 0 && jpg.byteLength <= MAX_FRAME && engine) engine.submitLcdFrame(jpg).catch(() => {}).finally(ack);
+      else ack();
     });
-    ports[0].start();
+    lcdPort.start();
   } else if (data?.type === 'settings' && engine) {
     await engine.applySettings(data.settings);
   } else if (data?.type === 'stop') {

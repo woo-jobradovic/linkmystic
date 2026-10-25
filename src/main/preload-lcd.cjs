@@ -6,5 +6,6 @@ contextBridge.exposeInMainWorld('lm', {
   onState: cb => ipcRenderer.on('state', (_e, s) => cb(s)),
   onSettings: cb => ipcRenderer.on('settings', (_e, s) => cb(s)),
   getLcdImage: name => ipcRenderer.invoke('lcd:get-image', name),
-  onLcdPort: cb => ipcRenderer.on('lcd-port', e => cb(e.ports[0])),
 });
+// a MessagePort cannot cross contextBridge, so it is transferred to the page with window.postMessage (Electron's documented way)
+ipcRenderer.on('lcd-port', e => window.postMessage('lm-lcd-port', '*', e.ports));

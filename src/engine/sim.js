@@ -29,7 +29,6 @@ export class SimHub {
   close() {}
 }
 export class SimMsi { constructor(info) { this.info = info; } async setup() {} async setHeader() { await new Promise(r => setTimeout(r, 95)); } async close() {} }
-export class SimLcd { constructor(info) { this.info = info; } async brightness() {} async show() { await new Promise(r => setTimeout(r, 40)); } close() {} }
 export class SimPsu {
   constructor(info) { this.info = info; this.model = MODELS[info.productId]; }
   async status() { return { model: this.model, tempVrm: 41.5, tempCase: 36.25, fanRpm: 0, inputVolts: 230, powerOut: 182, rails: { '+12V': { volts: 12.06, amps: 13.5, watts: 162.8 }, '+5V': { volts: 5.02, amps: 2.1, watts: 10.5 }, '+3.3V': { volts: 3.31, amps: 2.6, watts: 8.6 } } }; }

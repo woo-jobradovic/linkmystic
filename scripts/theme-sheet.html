@@ -1,0 +1,26 @@
+<!doctype html><html><body><script type="module">
+const { draw, loadFonts } = await import('../src/lcd/render.js');
+const { THEME_LIST } = await import('../src/lcd/themes.js');
+await loadFonts('../assets/fonts');
+const q = new URLSearchParams(location.search), only = (q.get('ids') || '').split(',').filter(Boolean);
+const list = THEME_LIST.filter(t => !only.length || only.includes(t.id));
+const T = 300, cols = [[0.05, 34], [0.9, 34], [1.75, 34], [2.6, 47]];
+const sheet = new OffscreenCanvas(T * cols.length, T * list.length), sx = sheet.getContext('2d');
+sx.fillStyle = '#333'; sx.fillRect(0, 0, sheet.width, sheet.height);
+const tile = new OffscreenCanvas(480, 480), tx = tile.getContext('2d', { willReadFrequently: true });
+const state = liquid => ({ liquid, pumpRpm: 2813, fanRpm: [1160, 1170, 1150], lcdPresent: true });
+list.forEach((th, row) => cols.forEach(([t, liquid], col) => {
+  draw(tx, state(liquid), { template: th.id, metric: 'liquid', min: 20, max: 50 }, t);
+  sx.save(); sx.beginPath(); sx.arc(col * T + T / 2, row * T + T / 2, T / 2 - 4, 0, Math.PI * 2); sx.clip();
+  sx.drawImage(tile, col * T, row * T, T, T); sx.restore();
+  sx.fillStyle = '#fff'; sx.font = '14px sans-serif'; sx.fillText(`${th.id} t=${t}`, col * T + 6, row * T + 16);
+}));
+for (const th of list) {   // draw + JPEG encode, as the LCD window does it
+  const a = performance.now();
+  for (let i = 0; i < 10; i++) { draw(tx, state(36), { template: th.id, metric: 'liquid', min: 20, max: 50 }, i * 0.11); await tile.convertToBlob({ type: 'image/jpeg', quality: 0.8 }); }
+  console.log(`${th.id}: ${((performance.now() - a) / 10).toFixed(1)} ms per frame`);
+}
+require('node:fs').writeFileSync(q.get('out'), Buffer.from(await (await sheet.convertToBlob({ type: 'image/png' })).arrayBuffer()));
+console.log(`saved ${q.get('out')}`);
+require('electron').ipcRenderer.send('done');
+</script></body></html>

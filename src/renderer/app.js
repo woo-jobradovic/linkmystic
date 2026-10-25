@@ -1,5 +1,7 @@
 // LinkMystic UI. Talks to the main process only through window.lm (see src/main/preload.cjs).
 import { draw, loadFonts, decodeImage, frameAt, freeFrames } from '../lcd/render.js';
+import { EFFECT_USES } from '../engine/effects.js';
+import { THEMES, THEME_FIELDS } from '../lcd/themes.js';
 
 const $ = id => document.getElementById(id);
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -71,12 +73,34 @@ function renderState() {
 lm.onState(s => { state = s; renderState(); });
 
 // ---------- lighting ----------
-const EFFECTS = [['temperature', 'Temperature'], ['static', 'Static'], ['breathing', 'Breathing'], ['rainbow', 'Rainbow wave'], ['color-cycle', 'Colour cycle'], ['off', 'Off']];
+const EFFECTS = [
+  ['temperature', 'Temperature', 'Color follows the liquid temperature: cool, warm and hot colors you choose below.'],
+  ['static', 'Static', 'One steady color on every device.'],
+  ['breathing', 'Breathing', 'Your color slowly fades in and out.'],
+  ['color-pulse', 'Color pulse', 'Your color flashes on and fades out, all devices together.'],
+  ['rainbow', 'Rainbow wave', 'Every fan and the pump show the whole rainbow, turning.'],
+  ['spiral-rainbow', 'Spiral rainbow', 'The turning rainbow, each device a quarter turn behind the next, so the colors spiral through the PC.'],
+  ['color-cycle', 'Color cycle', 'All devices change through the rainbow together, one color at a time.'],
+  ['color-wave', 'Color wave', 'A bright band of your color travels around each fan.'],
+  ['visor', 'Visor', 'A band of your color sweeps back and forth across each fan.'],
+  ['off', 'Off', 'All lights off (cooling keeps running).'],
+];
 $('effects').innerHTML = EFFECTS.map(([k, n]) => `<button class="chip" data-v="${k}">${n}</button>`).join('');
+// show only the controls the chosen effect uses
+function lightingControls() {
+  const uses = EFFECT_USES[S.lighting.effect] || [];
+  document.querySelectorAll('#tab-light [data-use]').forEach(el => { el.hidden = !uses.includes(el.dataset.use); });
+  $('lDesc').textContent = EFFECTS.find(e => e[0] === S.lighting.effect)?.[2] || '';
+}
+const pickEffect = v => { local({ lighting: { effect: v } }); save({ lighting: { effect: v } }); renderLighting(); };
+const pickDir = v => { local({ lighting: { direction: v } }); save({ lighting: { direction: v } }); chips('lDir', v, pickDir); };
 function renderLighting() {
   const L = S.lighting;
-  chips('effects', L.effect, v => { local({ lighting: { effect: v } }); save({ lighting: { effect: v } }); renderLighting(); });
+  chips('effects', L.effect, pickEffect);
+  chips('lDir', L.direction, pickDir);
+  lightingControls();
   $('lColor').value = L.color;
+  $('tcCool').value = L.tempColors.cool; $('tcWarm').value = L.tempColors.warm; $('tcHot').value = L.tempColors.hot;
   $('lBright').value = L.brightness; $('lBrightV').textContent = `${Math.round(L.brightness)}%`;
   $('lSpeed').value = 31 - L.period; $('lSpeedV').textContent = `${L.period} s per cycle`;
   $('tCool').value = L.temp.cool; $('tWarm').value = L.temp.warm; $('tHot').value = L.temp.hot;
@@ -84,6 +108,7 @@ function renderLighting() {
 $('lColor').oninput = e => save({ lighting: { color: e.target.value } });
 $('lBright').oninput = e => { $('lBrightV').textContent = `${e.target.value}%`; save({ lighting: { brightness: +e.target.value } }); };
 $('lSpeed').oninput = e => { const p = 31 - e.target.value; $('lSpeedV').textContent = `${p} s per cycle`; save({ lighting: { period: p } }); };
+for (const id of ['tcCool', 'tcWarm', 'tcHot']) $(id).oninput = () => save({ lighting: { tempColors: { cool: $('tcCool').value, warm: $('tcWarm').value, hot: $('tcHot').value } } });
 for (const id of ['tCool', 'tWarm', 'tHot']) $(id).onchange = () => save({ lighting: { temp: { cool: +$('tCool').value, warm: +$('tWarm').value, hot: +$('tHot').value } } });
 
 // ---------- cooling: presets + curve editor ----------
@@ -157,17 +182,55 @@ async function loadLcdImage() {
 function renderLcd() {
   const D = S.lcd;
   chips('lcdOnOff', D.enabled, v => save({ lcd: { enabled: v } }));
-  chips('lcdTemplate', D.template, v => save({ lcd: { template: v } }));
+  $('lcdTemplate').value = D.template; lcdBlurb();
   chips('lcdMetric', D.metric, v => save({ lcd: { metric: v } }));
-  $('lcdMin').value = D.min; $('lcdMax').value = D.max; $('lcdAccent').value = D.accent;
+  $('lcdMin').value = D.min; $('lcdMax').value = D.max;
   $('lcdBright').value = D.brightness; $('lcdBrightV').textContent = `${D.brightness}%`;
   $('lcdFps').value = D.fps; $('lcdFpsV').textContent = `${D.fps}`;
   $('imgRow').style.display = D.template === 'image' ? '' : 'none';
+  renderTheme();
   loadLcdImage();
 }
 $('lcdMin').onchange = () => save({ lcd: { min: +$('lcdMin').value, max: +$('lcdMax').value } });
 $('lcdMax').onchange = () => save({ lcd: { min: +$('lcdMin').value, max: +$('lcdMax').value } });
-$('lcdAccent').oninput = e => save({ lcd: { accent: e.target.value } });
+// ---------- LCD theme picker: a dropdown, since the list keeps growing ----------
+$('lcdTemplate').innerHTML = Object.entries(THEME_FIELDS).map(([id, f]) => `<option value="${id}">${esc(f.name)}</option>`).join('')
+  + '<option value="image">Image / GIF</option>';
+function lcdBlurb() { $('lcdBlurb').textContent = THEME_FIELDS[S.lcd.template]?.blurb || 'Your own image or animated GIF, with a small temperature badge.'; }
+$('lcdTemplate').onchange = e => {
+  const v = e.target.value;
+  local({ lcd: { template: v } }); save({ lcd: { template: v } });
+  $('imgRow').style.display = v === 'image' ? '' : 'none';
+  lcdBlurb(); renderTheme(); loadLcdImage();
+};
+
+// ---------- LCD theme: each theme keeps its own colors and animations, and can go back to its defaults ----------
+let themeShown = null;
+function saveTheme(part) {
+  const tpl = S.lcd.template;
+  const themes = { ...S.lcd.themes, [tpl]: { ...S.lcd.themes[tpl], ...part } };
+  local({ lcd: { themes } }); save({ lcd: { themes } });
+}
+function renderTheme() {
+  const tpl = S.lcd.template, F = THEME_FIELDS[tpl];
+  themeShown = tpl;
+  $('themeBox').hidden = !F;
+  if (!F) return;
+  const th = S.lcd.themes[tpl];
+  $('themeTitle').textContent = `${F.name} theme`;
+  $('themeColors').innerHTML = F.colors.map(([k, n]) => `<div class="row"><label for="tc-${k}">${esc(n)}</label><input type="color" id="tc-${k}" data-k="${k}" value="${esc(th.colors[k])}"></div>`).join('');
+  $('themeColors').querySelectorAll('input').forEach(el => { el.oninput = () => saveTheme({ colors: { ...S.lcd.themes[tpl].colors, [el.dataset.k]: el.value } }); });
+  $('themeAnimRow').hidden = !F.animations.length;
+  $('themeAnims').innerHTML = F.animations.map(([k, n]) => `<button class="chip${th.animations[k] ? ' on' : ''}" data-k="${k}">${esc(n)}</button>`).join('');
+  $('themeAnims').querySelectorAll('button').forEach(b => {
+    b.onclick = () => {
+      const k = b.dataset.k, on = !S.lcd.themes[tpl].animations[k];
+      saveTheme({ animations: { ...S.lcd.themes[tpl].animations, [k]: on } });
+      b.classList.toggle('on', on);
+    };
+  });
+}
+$('themeReset').onclick = () => { saveTheme(structuredClone(THEMES[S.lcd.template])); renderTheme(); };
 $('lcdBright').oninput = e => { $('lcdBrightV').textContent = `${e.target.value}%`; save({ lcd: { brightness: +e.target.value } }); };
 $('lcdFps').oninput = e => { $('lcdFpsV').textContent = e.target.value; save({ lcd: { fps: +e.target.value } }); };
 $('lcdPick').onclick = async () => { const name = await lm.pickLcdImage(); if (name) save({ lcd: { image: name, template: 'image' } }); };
@@ -230,11 +293,11 @@ function renderSettings() {
   chips('sMin', S.app.startMinimized, v => save({ app: { startMinimized: v } }));
 }
 
-// after a save, only the chip groups and lists are redrawn; sliders, colour pickers and number boxes keep what the user is doing
+// after a save, only the chip groups and lists are redrawn; sliders, color pickers and number boxes keep what the user is doing
 const refresh = {
-  lighting: () => chips('effects', S.lighting.effect, v => { local({ lighting: { effect: v } }); save({ lighting: { effect: v } }); refresh.lighting(); }),
+  lighting: () => { chips('effects', S.lighting.effect, pickEffect); chips('lDir', S.lighting.direction, pickDir); lightingControls(); },
   cooling: () => { if (dragIdx < 0) { renderCooling(); drawCurve(); } },
-  lcd: () => { chips('lcdOnOff', S.lcd.enabled, v => save({ lcd: { enabled: v } })); chips('lcdTemplate', S.lcd.template, v => save({ lcd: { template: v } })); chips('lcdMetric', S.lcd.metric, v => save({ lcd: { metric: v } })); $('imgRow').style.display = S.lcd.template === 'image' ? '' : 'none'; loadLcdImage(); },
+  lcd: () => { chips('lcdOnOff', S.lcd.enabled, v => save({ lcd: { enabled: v } })); $('lcdTemplate').value = S.lcd.template; lcdBlurb(); chips('lcdMetric', S.lcd.metric, v => save({ lcd: { metric: v } })); $('imgRow').style.display = S.lcd.template === 'image' ? '' : 'none'; if (themeShown !== S.lcd.template) renderTheme(); loadLcdImage(); },
   msi: () => chips('msiMode', S.msi.mode, v => save({ msi: { mode: v } })),
   app: renderSettings,
 };

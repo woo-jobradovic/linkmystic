@@ -54,3 +54,12 @@ pre.log { background: #07080b; border: 1px solid var(--line); border-radius: 10p
 a { color: var(--cyan); }
 .row > label.inline { min-width: auto; }
 .mb { margin-bottom: 10px; }
+
+/* .row sets display:flex, which would otherwise beat the hidden attribute */
+[hidden] { display: none !important; }
+/* temperature rows: equal label width so the number boxes line up */
+#tab-light [data-use="temp"] .row > label.inline { min-width: 44px; }
+/* LCD theme colors: two columns so six pickers stay compact */
+.theme-colors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 18px; }
+.theme-colors .row { margin: 6px 0; }
+.theme-colors .row > label { min-width: 0; flex: 1; }

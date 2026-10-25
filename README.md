@@ -1,74 +1,194 @@
-<p align="center"><img src="assets/icon-png/icon-256.png" width="96" alt="LinkMystic icon"></p>
+<p align="center"><img src="assets/icon-png/icon-256.png" width="96" alt="LinkMystic logo"></p>
 
-# LinkMystic
+<h1 align="center">LinkMystic</h1>
 
-**One small Windows app instead of Corsair iCUE + MSI Mystic Light.**
-Lighting, fan and pump control and the pump LCD for **Corsair iCUE LINK**, the RGB headers of newer **MSI motherboards**, and read-only monitoring of **Corsair HXi/RMi power supplies**: all in sync, from one window, with no fighting between programs.
+<p align="center"><b>Lightweight, open-source RGB sync and fan control for MSI Mystic Light motherboards and Corsair iCUE LINK.</b><br>
+One small Windows app instead of iCUE + MSI Center: synced lighting, AIO pump and fan curves, and 13 animated pump LCD themes.</p>
 
-> **Experimental (v0.1).** LinkMystic controls your AIO pump and fans. It has strong safety rules (below), but it is new and has been tested on a small number of systems. Use it at your own risk and read *First-time setup* before you start.
+<p align="center">
+<a href="../../releases/latest"><img alt="Download for Windows" src="https://img.shields.io/badge/Download-Windows%2010%20%2F%2011-2ea44f?style=for-the-badge&logo=windows"></a>
+<img alt="License: GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-blue?style=for-the-badge">
+<img alt="No telemetry" src="https://img.shields.io/badge/telemetry-none-success?style=for-the-badge">
+</p>
 
-![Dashboard](docs/screenshots/dash.png)
+![LinkMystic dashboard: liquid temperature, pump and fan speeds, power supply watts](docs/screenshots/dash.png)
 
-## Why?
-iCUE and MSI Center both want to control the same lights, and when both run they fight: lights go dark, effects stutter, profiles reset. LinkMystic replaces both with one lightweight app that talks to the hardware directly.
+**LinkMystic** syncs the RGB lighting of your **Corsair iCUE LINK** fans, AIO pump and LCD cap with the **ARGB headers of your MSI motherboard** (Mystic Light, JARGB and JAF). It also controls fan and pump speed from the liquid temperature, and turns the **iCUE LINK pump LCD** into a live, animated temperature display. It is free, open source and built for gamers who want their RGB to just work without two heavy vendor apps fighting in the background.
+
+> **Status: v0.1, early release.** Tested daily on a Corsair TITAN 360 RX LCD + RX RGB fans + an MSI MAG X870E TOMAHAWK WIFI. It controls your pump and fans, so read [First-time setup](#first-time-setup-important) before you start.
+
+## Contents
+- [The problem it solves](#the-problem-it-solves)
+- [Why gamers like it: lightweight by design](#why-gamers-like-it-lightweight-by-design)
+- [Features](#features)
+- [13 animated pump LCD themes](#13-animated-pump-lcd-themes)
+- [Screenshots](#screenshots)
+- [Supported hardware](#supported-hardware)
+- [Download and install](#download-and-install)
+- [First-time setup](#first-time-setup-important)
+- [Safety rules](#safety-rules-always-on)
+- [FAQ](#faq)
+- [Troubleshooting](#troubleshooting)
+- [Build from source](#build-from-source)
+- [Credits and license](#credits-and-license)
+
+## The problem it solves
+
+A Corsair iCUE LINK cooler and fans on an MSI motherboard normally means running **two vendor suites at once**: Corsair iCUE for the fans, pump and LCD, and MSI Center with Mystic Light for the motherboard ARGB headers. Many users run into the same issues:
+
+- **RGB out of sync.** Corsair fans and the fans on the MSI ARGB headers run separate effects that drift apart, with different speeds and colors.
+- **The two apps fight.** Both talk to the hardware and both start with Windows. When they overlap, effects stutter, colors jump and settings get lost.
+- **Background load.** Two suites, their services and their updaters keep running all the time, even in the middle of a game.
+- **No simple way to sync Mystic Light with iCUE.** There is no shared effect engine between the two ecosystems.
+
+LinkMystic replaces both with **one app and one effect engine**. Every LED on the Corsair LINK chain and the MSI headers runs the same effect from the same clock, so a rainbow wave really travels through the whole PC.
+
+## Why gamers like it: lightweight by design
+
+| | LinkMystic |
+|---|---|
+| Background services | **None.** It's one normal app in the tray. |
+| Drivers | **None.** It talks to the devices over standard Windows USB HID. |
+| Admin rights | **Not needed.** It installs per user. |
+| Account, login, cloud | **None.** No sign-in and no online features. |
+| Internet / telemetry | **None.** It makes no network connections. |
+| CPU while gaming | **About 2 % of a 24-thread CPU in total**, measured with lighting at 30 updates per second **and** the pump LCD animating at about 22 fps. |
+| Memory | About 450 MB with the animated LCD running (an Electron app, like Discord). |
+| Startup | Starts with Windows, minimized to the tray. |
+
+The heavy work is split so it never slows down a game:
+- the pump LCD has its own USB thread;
+- LCD frames are drawn by a background renderer that takes about 2 ms per frame;
+- the cooling loop keeps running even if the window is closed or the LCD renderer restarts.
 
 ## Features
-- **Lighting in sync** across iCUE LINK fans, pump ring, LCD-cap ring and the MSI board headers: Rainbow wave, Static, Breathing, Colour cycle, Temperature (green/yellow/red), Off.
-- **Cooling presets** Quiet / Balanced / Extreme, or your own **Custom curve** (drag the points), for fans and pump.
-- **Pump LCD designer**: Cyberpunk and Minimal templates, or your own **image or animated GIF**, with a live preview, about 20 fps.
-- **MSI board modes**: the board's own smooth built-in effects, an exact copy of the Corsair look, or a mix.
-- **PSU monitoring** (HXi/RMi): watts, rail voltages and currents, temperatures, fan.
-- **Tray app**: starts with Windows and keeps running when you close the window.
-- **Diagnostics button**: one click copies a bug report (serial numbers hidden).
 
-| Cooling | LCD designer | MSI board |
-|---|---|---|
-| ![Cooling](docs/screenshots/cool.png) | ![LCD](docs/screenshots/lcd.png) | ![MSI](docs/screenshots/msi.png) |
+### RGB sync across Corsair and MSI
+- **10 effects in perfect sync** on iCUE LINK fans, pump ring, LCD-cap ring and MSI ARGB headers: Temperature (your own cool/warm/hot colors), Static, Breathing, Color pulse, Rainbow wave, Spiral rainbow, Color cycle, Color wave, Visor and Off.
+- **Smooth 30 updates per second** on Corsair devices, with gamma-corrected fades. Breathing no longer steps near dark.
+- **Direction control** (clockwise / counter-clockwise) for the rainbow and wave effects.
+- **Clean settings:** each effect shows only the options it actually uses.
+
+### Fan and pump control (AIO cooling)
+- **Presets:** Quiet, Balanced, Extreme, or your own **custom fan and pump curves**, set by dragging points on a graph.
+- Curves follow the **liquid temperature** from the AIO, which is the right sensor for water cooling.
+- **Safety rules that cannot be turned off** (see below).
+
+### MSI Mystic Light motherboard control
+- Drives the **JARGB1, JARGB2, JARGB3 and JAF** headers of MSI X870, X870E, B850, B840 and Z890 boards with the "761" lighting controller.
+- **Three modes:**
+  - the board's own **built-in effects**, perfectly smooth;
+  - an **exact copy** of the Corsair effect;
+  - **mixed**: exact on the headers you choose, built-in on the rest.
+- Set your LED count per header (fans on a splitter count once).
+
+### Pump LCD designer
+- **13 animated themes** with live preview (see below), each with its own colors, animation switches and **Restore theme defaults**.
+- Show **coolant temperature, pump RPM or fan RPM**, with a gauge that follows the value.
+- Or upload your **own image or animated GIF** with a small temperature badge.
+- **Off (dark)** turns the screen dark at once.
+
+### And more
+- **Corsair HXi / RMi PSU monitoring:** watts, rail voltages and currents, temperatures, fan.
+- **Tray app:** it starts with Windows and keeps running when you close the window.
+- **Diagnostics in one click:** copies a bug report with serial numbers hidden.
+- **Conflict detection:** if iCUE, MSI Center or another RGB tool is running, LinkMystic leaves the device alone and tells you which program to close.
+
+## 13 animated pump LCD themes
+
+Turn the 480x480 iCUE LINK pump screen into a gaming-style temperature display. Each theme has its own look, colors and animations, and every gauge follows the live liquid temperature. All artwork is drawn in code; there are no game assets.
+
+![All 13 animated LinkMystic pump LCD themes, with the coolant temperature rising and falling](docs/screenshots/lcd-themes.gif)
+
+Cyberpunk · Minimal · Point Breach · Twin Citadels · Drop Zone · Astral Artifice · Pixel Blocks · Neon Horizon · Phosphor Optics · Storm Circle · Seraphic Flight · Arena Shields · Eternal Realm · plus **your own image or GIF**.
+
+## Screenshots
+
+*Screenshots from demo mode (simulated devices).*
+
+| Lighting | Cooling curves |
+|---|---|
+| ![LinkMystic lighting tab: 10 synced RGB effects with brightness, speed and direction](docs/screenshots/light.png) | ![LinkMystic cooling tab: Quiet, Balanced, Extreme and custom fan curve editor](docs/screenshots/cool.png) |
+| **Pump LCD designer** | **MSI Mystic Light headers** |
+| ![LinkMystic LCD tab: theme picker, live preview, theme colors and animations](docs/screenshots/lcd.png) | ![LinkMystic MSI board tab: JARGB and JAF headers, built-in, mixed and exact modes](docs/screenshots/msi.png) |
+| **Devices and PSU** | **Dashboard** |
+| ![LinkMystic devices tab: iCUE LINK hub devices and Corsair HX1500i power supply readings](docs/screenshots/devices.png) | ![LinkMystic dashboard](docs/screenshots/dash.png) |
 
 ## Supported hardware
-| Family | Supported | Notes |
-|---|---|---|
-| Corsair **iCUE LINK System Hub** | Lighting, fan + pump control, liquid temperature | H100i–H170i, TITAN 240–420 (incl. RX/LCD), QX/LX/RX/RX MAX fans, XD5/XD6/XC7/XG7, LCD caps, 5000T/9000D cases. See [docs/SUPPORTED_HARDWARE.md](docs/SUPPORTED_HARDWARE.md). |
-| Corsair **iCUE LINK pump LCD** | Custom screen | 480x480, about 20 fps |
-| **MSI** X870 / X870E / B850 / B840 / Z890 boards with the "761" lighting controller | JARGB1-3 + JAF headers | About 35 boards; any other MSI board is **detected but never written to**. |
-| Corsair **HXi / RMi** PSU | Monitoring only | Never changes PSU settings |
 
-Not supported (yet): other Corsair devices (Commander Core, RAM, keyboards, mice), older MSI boards, MSI onboard LEDs, the 12 V JRGB header. Use [OpenRGB](https://openrgb.org) for those, or open a *Device support* issue.
+| Family | What LinkMystic does | Notes |
+|---|---|---|
+| Corsair **iCUE LINK System Hub** | Lighting, fan and pump control, liquid temperature | TITAN and H-series AIOs, QX / LX / RX / RX MAX fans, XD5 / XD6 / XC7 / XG7, LCD caps, 5000T / 9000D cases |
+| Corsair **iCUE LINK pump LCD** | Animated themes, image / GIF | 480x480, about 20 fps |
+| **MSI** X870 / X870E / B850 / B840 / Z890 motherboards (Mystic Light "761" controller) | JARGB1-3 and JAF ARGB headers | About 35 boards. Other MSI boards are **detected but never written to**. |
+| Corsair **HXi / RMi** power supplies | Monitoring only | Never changes PSU settings |
+
+The full list, including the exact MSI models and what is tested vs expected, is in **[docs/SUPPORTED_HARDWARE.md](docs/SUPPORTED_HARDWARE.md)**. Is your device missing? Open a [Device support](../../issues/new/choose) issue with your diagnostics.
+
+Not supported yet: Commander Core / Commander Pro, Corsair RAM, keyboards and mice, older MSI boards, MSI onboard LEDs and the 12 V JRGB header. [OpenRGB](https://openrgb.org) covers many of those.
+
+## Download and install
+
+1. Download **`LinkMystic-Setup-x.y.z.exe`** from **[Releases](../../releases/latest)**. Each release lists its SHA-256 checksum and carries a GitHub build-provenance attestation (see [SECURITY.md](SECURITY.md)).
+2. Run it. It installs for your user only, so no admin prompt appears. LinkMystic is not code-signed yet, so Windows may show **"Windows protected your PC"**: click **More info → Run anyway**.
+3. Start **LinkMystic** from the desktop or the Start menu. It lives in the tray next to the clock.
+
+To uninstall, go to *Settings → Apps → LinkMystic → Uninstall*. Your settings stay in `%APPDATA%\LinkMystic` unless you delete that folder.
 
 ## First-time setup (important)
-1. **Store a safe profile in your LINK hub first.** Open iCUE once, select your AIO, turn on **Device Memory Mode**, and set the pump to **Balanced or Extreme** and the fans to **Balanced**. If LinkMystic ever stops, the hub runs this stored profile on its own.
-2. **Close iCUE and MSI Center's lighting**, and turn off their autostart (or uninstall them). LinkMystic leaves any device alone while other RGB/fan software is running, and shows a yellow banner telling you which program to close.
-3. **Install LinkMystic** (below), open it, and check the *Dashboard*: liquid temperature, pump and fan speeds should show.
-4. On the **MSI board** tab, tick the headers you use and enter their LED counts (for example 3 fans x 12 LEDs = 36).
+1. **Store a safe profile in your LINK hub first.** Open iCUE once, select your AIO and turn on **Device Memory Mode**. Set the pump to **Balanced or Extreme** and the fans to **Balanced**. If LinkMystic ever stops, the hub runs this stored profile on its own.
+2. **Close iCUE and MSI Center** and turn off their autostart, or uninstall them. LinkMystic leaves any device alone while other RGB or fan software is using it, and shows which program to close.
+3. **Install and open LinkMystic.** The *Dashboard* should show liquid temperature, pump and fan speeds.
+4. On the **MSI board** tab, tick the headers you use and enter their LED counts (for example, 3 fans × 12 LEDs = 36).
 
-## Install
-1. Download `LinkMystic-Setup-x.y.z.exe` from [Releases](../../releases). The release page also lists the SHA-256 checksum.
-2. Run it. LinkMystic is not code-signed yet, so Windows may show **"Windows protected your PC"**: click **More info -> Run anyway**.
-3. Start **LinkMystic** from the desktop or Start menu. It appears in the tray (next to the clock).
+## Safety rules (always on)
+- The pump never runs below **70 %**, and fans never below **20 %**.
+- If the liquid goes above **50 °C**, the temperature reading is lost, or the pump stalls, pump and fans go to **100 %** and the lights flash red.
+- On quit, crash or unplug, the LINK hub returns to its **stored profile** (Device Memory Mode). The engine restarts itself after a crash.
+- Unknown MSI boards are never written to. PSU settings are never changed.
 
-To uninstall: *Settings -> Apps -> LinkMystic -> Uninstall*. Your settings stay in `%APPDATA%\LinkMystic` unless you delete that folder.
+## FAQ
 
-## Safety rules (always on, cannot be turned off)
-- The pump never runs below **70 %**; fans never below **20 %**.
-- If the liquid goes above **50 °C**, the temperature reading is lost, or the pump stalls (under 1000 rpm three times in a row), pump and fans go to **100 %** and the lights flash red.
-- On quit, crash or unplug, the LINK hub is handed back to its **stored profile** (Device Memory Mode). The engine restarts itself after a crash.
-- Unknown MSI boards are never written to. PSU settings (OCP, fan mode) are never changed.
+**Is LinkMystic an alternative to Corsair iCUE and MSI Center?**
+For the supported devices, yes. It covers lighting, fan and pump curves, the pump LCD and Mystic Light ARGB headers, so you can uninstall both suites. You only need iCUE once, to store the safe hardware profile (Device Memory Mode).
+
+**Can I sync Corsair iCUE LINK fans with MSI Mystic Light?**
+Yes. That is the main reason LinkMystic exists. One effect engine drives both, so colors and motion stay in sync.
+
+**Will it slow down my games?**
+No. It uses about 2 % of a 24-thread CPU with all lighting and the LCD animating, runs no services or drivers, and makes no network connections.
+
+**Does it work with my MSI motherboard?**
+It works with MSI X870, X870E, B850, B840 and Z890 boards that use the "761" Mystic Light controller; check [the list](docs/SUPPORTED_HARDWARE.md). Other MSI boards are detected and left untouched.
+
+**Can I put a GIF or my own picture on the Corsair pump LCD?**
+Yes. Pick *Image / GIF* on the LCD screen tab. Animated GIF, PNG, JPG and WebP all work, with a small temperature badge on top.
+
+**Is it safe for my AIO?**
+It enforces minimum pump and fan speeds, fails safe to 100 % on any problem, and hands the hub back to its stored profile when it stops (see [Safety rules](#safety-rules-always-on)). It is still a v0.1 release, so set up the safe hardware profile first.
+
+**Why does Windows show a SmartScreen warning?**
+The installer is not code-signed yet. The release is built by a public GitHub workflow, and you can verify it with its checksum and build attestation.
+
+**How is this different from OpenRGB or SignalRGB?**
+OpenRGB supports far more devices and is great for lighting. LinkMystic focuses on one popular combination, iCUE LINK plus MSI X870/B850-era boards, and adds what those setups need beyond lighting: AIO pump and fan curves with safety rules, and an animated pump LCD.
 
 ## Troubleshooting
-- **Nothing found / yellow banner:** another program (iCUE, Corsair Service, MSI Mystic Light, SignalRGB, OpenRGB, FanControl) is using the devices. Close it.
-- **MSI lights step or stutter:** the MSI controller takes about 10 updates per second in total. Use *Built-in effects* or *Mixed* mode on the MSI board tab.
-- **Something else:** Logs -> **Copy diagnostics**, then open an [issue](../../issues/new/choose) and paste it.
+- **Nothing found, or a yellow banner:** another program (iCUE, Corsair Service, MSI Mystic Light, SignalRGB, OpenRGB, FanControl) is using the devices. Close it.
+- **MSI lights step or stutter:** the MSI controller accepts about 10 updates per second in total. Use *Built-in effects* or *Mixed* mode on the MSI board tab.
+- **Anything else:** go to Logs → **Copy diagnostics**, then open an [issue](../../issues/new/choose) and paste it.
 
 ## Build from source
 ```
 npm ci
-npm test            # packet + safety tests, no hardware needed
-npm run demo        # run with simulated devices
-npm run dist        # build the Windows installer into dist/
+npm test              # protocol + safety tests, no hardware needed
+npm run demo          # run with simulated devices
+npm run themes:preview  # render every LCD theme to theme-sheet.png
+npm run dist          # build the Windows installer into dist/
 ```
-Requires Node.js 24 and Windows 10/11 x64.
+Requires Node.js 24 and Windows 10/11 x64. Want to add an LCD theme? See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Credits and licence
-LinkMystic is free software under the **GNU GPL v3 or later** (see [LICENSE](LICENSE)). The device protocols were learned from the excellent work of [OpenRGB](https://gitlab.com/CalcProgrammer1/OpenRGB) (GPL-2.0-or-later), [OpenLinkHub](https://github.com/jurkovic-nikola/OpenLinkHub) (GPL-3.0), [liquidctl](https://github.com/liquidctl/liquidctl) (GPL-3.0) and [SignalRGB](https://signalrgb.com). Third-party components: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+## Credits and license
+LinkMystic is free software under the **GNU GPL v3 or later** (see [LICENSE](LICENSE)). The device protocols were learned from the excellent work of [OpenRGB](https://gitlab.com/CalcProgrammer1/OpenRGB) (GPL-2.0-or-later), [OpenLinkHub](https://github.com/jurkovic-nikola/OpenLinkHub) (GPL-3.0), [liquidctl](https://github.com/liquidctl/liquidctl) (GPL-3.0) and [SignalRGB](https://signalrgb.com). Third-party components are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-LinkMystic is not affiliated with, endorsed by or supported by Corsair or MSI. Corsair, iCUE, MSI and Mystic Light are trademarks of their owners and are used here only to describe compatibility.
+LinkMystic is not affiliated with, endorsed by or supported by Corsair or MSI. Corsair, iCUE, MSI and Mystic Light are trademarks of their owners and are used here only to describe compatibility. The LCD themes are original artwork and are not connected to any game or publisher.

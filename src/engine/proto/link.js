@@ -6,7 +6,7 @@ export const VID = 0x1b1c;
 export const PID_HUB = 0x0c3f;
 export const USAGE_PAGE = 0xff42;
 export const WRITE_LEN = 513;          // report id + 512
-export const COLOR_CHUNK = 508;        // max payload per colour write request
+export const COLOR_CHUNK = 508;        // max payload per color write request
 
 export const CMD = {
   open: [0x0d, 0x01], openColor: [0x0d, 0x00], close: [0x05, 0x01, 0x01],
@@ -104,7 +104,7 @@ export function speedData(duties) {
   return data;
 }
 
-// Colour stream for all LED devices in channel order; pump LEDs 16-19 sit under an LCD cap and are sent black.
+// Color stream for all LED devices in channel order; pump LEDs 16-19 sit under an LCD cap and are sent black.
 export function colorData(devices, perChannel) {
   const hasLcd = devices.some(d => d.kind === 'lcd');
   const data = [];
@@ -120,7 +120,7 @@ export function colorData(devices, perChannel) {
   return data;
 }
 
-// Split a colour payload into the 0x06 first chunk + 0x07 continuation chunks
+// Split a color payload into the 0x06 first chunk + 0x07 continuation chunks
 export function colorChunks(payload) {
   const out = [];
   for (let off = 0; off < payload.length; off += COLOR_CHUNK) out.push([off === 0 ? CMD.writeColor : CMD.writeColorNext, payload.slice(off, off + COLOR_CHUNK)]);
