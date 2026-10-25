@@ -13,15 +13,15 @@ One small Windows app instead of iCUE + MSI Center: synced lighting, AIO pump an
 
 ![LinkMystic dashboard: liquid temperature, pump and fan speeds, power supply watts](docs/screenshots/dash.png)
 
-**LinkMystic** syncs the RGB lighting of your **Corsair iCUE LINK** fans, AIO pump and LCD cap with the **ARGB headers of your MSI motherboard** (Mystic Light, JARGB and JAF). It also controls fan and pump speed from the liquid temperature, and turns the **iCUE LINK pump LCD** into a live, animated temperature display. It is free, open source and built for gamers who want their RGB to just work without two heavy vendor apps fighting in the background.
+**LinkMystic** syncs the RGB lighting of your **Corsair iCUE LINK** fans, AIO pump and LCD cap with the **ARGB headers of your MSI motherboard** (Mystic Light, JARGB and JAF). It also controls fan and pump speed from the liquid temperature, and turns the **iCUE LINK pump LCD** into a live, animated temperature display. It is a free, open-source **iCUE alternative** (and MSI Center replacement) for these devices, built for gamers who want their RGB to just work without two heavy vendor apps fighting in the background.
 
 > **Status: v0.1, early release.** Tested daily on a Corsair TITAN 360 RX LCD + RX RGB fans + an MSI MAG X870E TOMAHAWK WIFI. It controls your pump and fans, so read [First-time setup](#first-time-setup-important) before you start.
 
 ## Contents
-- [The problem it solves](#the-problem-it-solves)
+- [iCUE and MSI Mystic Light not syncing?](#icue-and-msi-mystic-light-not-syncing-the-problem-linkmystic-solves)
 - [Why gamers like it: lightweight by design](#why-gamers-like-it-lightweight-by-design)
 - [Features](#features)
-- [13 animated pump LCD themes](#13-animated-pump-lcd-themes)
+- [Customize your Corsair iCUE LINK LCD screen](#customize-your-corsair-icue-link-lcd-screen)
 - [Screenshots](#screenshots)
 - [Supported hardware](#supported-hardware)
 - [Download and install](#download-and-install)
@@ -32,9 +32,16 @@ One small Windows app instead of iCUE + MSI Center: synced lighting, AIO pump an
 - [Build from source](#build-from-source)
 - [Credits and license](#credits-and-license)
 
-## The problem it solves
+## iCUE and MSI Mystic Light not syncing? The problem LinkMystic solves
 
-A Corsair iCUE LINK cooler and fans on an MSI motherboard normally means running **two vendor suites at once**: Corsair iCUE for the fans, pump and LCD, and MSI Center with Mystic Light for the motherboard ARGB headers. Many users run into the same issues:
+A Corsair iCUE LINK cooler and fans on an MSI motherboard normally means running **two vendor suites at once**: Corsair iCUE for the fans, pump and LCD, and MSI Center with Mystic Light for the motherboard ARGB headers. Sound familiar?
+
+- Your Corsair fans and the fans on the MSI headers **show different colors or drift out of sync**.
+- Lights **flicker or stutter** when iCUE and Mystic Light run at the same time.
+- Effects or colors **reset after a restart** or when one app updates.
+- You want **one RGB effect across the whole PC**, but each app only controls its own devices.
+
+What is going on:
 
 - **RGB out of sync.** Corsair fans and the fans on the MSI ARGB headers run separate effects that drift apart, with different speeds and colors.
 - **The two apps fight.** Both talk to the hardware and both start with Windows. When they overlap, effects stutter, colors jump and settings get lost.
@@ -94,13 +101,22 @@ The heavy work is split so it never slows down a game:
 - **Diagnostics in one click:** copies a bug report with serial numbers hidden.
 - **Conflict detection:** if iCUE, MSI Center or another RGB tool is running, LinkMystic leaves the device alone and tells you which program to close.
 
-## 13 animated pump LCD themes
+## Customize your Corsair iCUE LINK LCD screen
 
-Turn the 480x480 iCUE LINK pump screen into a gaming-style temperature display. Each theme has its own look, colors and animations, and every gauge follows the live liquid temperature. All artwork is drawn in code; there are no game assets.
+Turn the 480x480 **iCUE LINK LCD screen** on your AIO pump into a live, animated temperature display: pick one of **13 animated themes**, or show your **own image or animated GIF**. Every gauge follows the live value, and all artwork is drawn in code, with no game assets.
 
 ![All 13 animated LinkMystic pump LCD themes, with the coolant temperature rising and falling](docs/screenshots/lcd-themes.gif)
 
 Cyberpunk · Minimal · Point Breach · Twin Citadels · Drop Zone · Astral Artifice · Pixel Blocks · Neon Horizon · Phosphor Optics · Storm Circle · Seraphic Flight · Arena Shields · Eternal Realm · plus **your own image or GIF**.
+
+What you can customize:
+- **Show** coolant (liquid) temperature, pump RPM or average fan RPM, with your own gauge range.
+- **Colors and animations per theme.** Change the number, gauge and detail colors, and switch effects like glitch, scanlines, embers or lightning on or off. **Restore theme defaults** brings back the original look at any time.
+- **Your own picture or GIF:** PNG, JPG, WebP or animated GIF, with a small temperature badge on top. A **square image (480x480 or larger)** looks best; GIFs can have up to 150 frames and 20 MB.
+- **Backlight brightness**, frame rate (about 20 fps max) and **Off (dark)**.
+- **No iCUE needed.** The screen runs from LinkMystic alone, with a live preview in the app.
+
+Works with the **iCUE LINK LCD screen** (USB 1B1C:0C4E). Tested on the TITAN 360 RX LCD; expected on other iCUE LINK AIOs with the LCD screen module. The older **ELITE LCD** coolers use a different screen and are not supported yet.
 
 ## Screenshots
 
@@ -163,6 +179,15 @@ It works with MSI X870, X870E, B850, B840 and Z890 boards that use the "761" Mys
 
 **Can I put a GIF or my own picture on the Corsair pump LCD?**
 Yes. Pick *Image / GIF* on the LCD screen tab. Animated GIF, PNG, JPG and WebP all work, with a small temperature badge on top.
+
+**Which Corsair LCD screens are supported?**
+The **iCUE LINK LCD screen** on iCUE LINK AIOs (tested on the TITAN 360 RX LCD). The older ELITE LCD coolers use a different screen and are not supported yet; please open a [Device support](../../issues/new/choose) issue if you have one.
+
+**Can the LCD show CPU or GPU temperature?**
+Not yet. It shows the coolant temperature from the AIO, pump RPM or fan RPM. Coolant temperature is what the fan and pump curves use, and it reacts more calmly than CPU spikes.
+
+**Do I need iCUE running for the LCD or the lighting?**
+No. You only need iCUE once, to store the safe hardware profile (Device Memory Mode). After that, LinkMystic drives the LCD, lighting, fans and pump on its own.
 
 **Is it safe for my AIO?**
 It enforces minimum pump and fan speeds, fails safe to 100 % on any problem, and hands the hub back to its stored profile when it stops (see [Safety rules](#safety-rules-always-on)). It is still a v0.1 release, so set up the safe hardware profile first.
