@@ -28,6 +28,7 @@ One small Windows app instead of iCUE + MSI Center: synced lighting, AIO pump an
 - [First-time setup](#first-time-setup-important)
 - [Safety rules](#safety-rules-always-on)
 - [FAQ](#faq)
+- [How it's made (AI use)](#how-its-made-ai-use)
 - [Troubleshooting](#troubleshooting)
 - [Build from source](#build-from-source)
 - [Credits and license](#credits-and-license)
@@ -59,14 +60,28 @@ LinkMystic replaces both with **one app and one effect engine**. Every LED on th
 | Admin rights | **Not needed.** It installs per user. |
 | Account, login, cloud | **None.** No sign-in and no online features. |
 | Internet / telemetry | **None.** It makes no network connections. |
-| CPU while gaming | **About 2 % of a 24-thread CPU in total**, measured with lighting at 30 updates per second **and** the pump LCD animating at about 22 fps. |
-| Memory | About 450 MB with the animated LCD running (an Electron app, like Discord). |
+| CPU while gaming | **Under 1 % of a 24-thread CPU** (measured 0.63 % average, 0.91 % peak over 10 minutes) with lighting at 30 updates per second **and** the pump LCD animating. |
+| Memory | About 600 MB working set, 368 MB private, with the animated LCD running (an Electron app, like Discord). |
 | Startup | Starts with Windows, minimized to the tray. |
 
 The heavy work is split so it never slows down a game:
 - the pump LCD has its own USB thread;
 - LCD frames are drawn by a background renderer that takes about 2 ms per frame;
 - the cooling loop keeps running even if the window is closed or the LCD renderer restarts.
+
+### Measured against iCUE + MSI Center
+Same PC, lighting running, 10 minutes each, sampled every 5 seconds. CPU is the share of all 24 threads.
+
+| | Processes | CPU average (peak) | Memory (working set) | Private memory |
+|---|---|---|---|---|
+| iCUE | 4 | 0.43 % (0.96 %) | 559 MB | 525 MB |
+| MSI Center + Mystic Light | 6 (+3 services) | 0.00 % (0.01 %) | 214 MB | 124 MB |
+| **iCUE + MSI Center together** | **10** | **0.43 %** | **773 MB** | **649 MB** |
+| **LinkMystic** | **6** | **0.63 % (0.91 %)** | **604 MB** | **368 MB** |
+
+The honest reading: LinkMystic uses about **43 % less private memory** and needs **no services or drivers**. It uses a little more CPU than the vendor apps, because it computes every frame itself to keep Corsair and MSI in one synced effect (30 updates per second) and draws the LCD, while the vendor apps let the hub and the board run their own built-in effects. All of them stay under 1 % of the CPU.
+
+Test PC: Corsair TITAN 360 RX LCD + RX RGB fans, MSI MAG X870E TOMAHAWK WIFI, Windows 11, 26 Oct 2026; iCUE 5 (installer 1.22.16) and MSI Center 2.0.75.0. The measuring script is [docs/benchmark.ps1](docs/benchmark.ps1), so you can repeat it on your own PC.
 
 ## Features
 
@@ -172,7 +187,7 @@ For the supported devices, yes. It covers lighting, fan and pump curves, the pum
 Yes. That is the main reason LinkMystic exists. One effect engine drives both, so colors and motion stay in sync.
 
 **Will it slow down my games?**
-No. It uses about 2 % of a 24-thread CPU with all lighting and the LCD animating, runs no services or drivers, and makes no network connections.
+No. It uses under 1 % of a 24-thread CPU with all lighting and the LCD animating (see [the measurements](#measured-against-icue--msi-center)), runs no services or drivers, and makes no network connections.
 
 **Does it work with my MSI motherboard?**
 It works with MSI X870, X870E, B850, B840 and Z890 boards that use the "761" Mystic Light controller; check [the list](docs/SUPPORTED_HARDWARE.md). Other MSI boards are detected and left untouched.
@@ -197,6 +212,18 @@ The installer is not code-signed yet. The release is built by a public GitHub wo
 
 **How is this different from OpenRGB or SignalRGB?**
 OpenRGB supports far more devices and is great for lighting. LinkMystic focuses on one popular combination, iCUE LINK plus MSI X870/B850-era boards, and adds what those setups need beyond lighting: AIO pump and fan curves with safety rules, and an animated pump LCD.
+
+**How is LinkMystic different from OpenLinkHub?**
+[OpenLinkHub](https://github.com/jurkovic-nikola/OpenLinkHub) is a mature, open-source **Linux** app for Corsair hubs, AIOs and peripherals, and LinkMystic learned from its protocol work. LinkMystic is for **Windows** and focuses on one thing OpenLinkHub does not do: syncing Corsair iCUE LINK with **MSI Mystic Light** motherboard headers from one effect engine, plus animated pump LCD themes. On Linux, use OpenLinkHub.
+
+**Is there a Linux version?**
+No, Windows 10/11 only for now. On Linux, [OpenLinkHub](https://github.com/jurkovic-nikola/OpenLinkHub) already covers Corsair devices very well.
+
+**Does it support the new 5-inch iCUE LINK LCD screen module?**
+Not yet. If you have one, please open a [Device support](../../issues/new/choose) issue with your diagnostics (Logs → Copy diagnostics).
+
+## How it's made (AI use)
+LinkMystic is designed, directed and tested by me on my own PC. The code is written with the help of **Claude**, Anthropic's AI coding assistant, which is why it appears as a contributor. Every change is tested on real hardware before a release, the full source is public, and each installer is built by a public GitHub workflow with checksums and a build attestation, so you can verify exactly what you run.
 
 ## Troubleshooting
 - **Nothing found, or a yellow banner:** another program (iCUE, Corsair Service, MSI Mystic Light, SignalRGB, OpenRGB, FanControl) is using the devices. Close it.
